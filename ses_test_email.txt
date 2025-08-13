@@ -1,0 +1,70 @@
+Return-Path: <leiman.baruch@gmail.com>
+Received: from mail-lj1-f176.google.com (mail-lj1-f176.google.com [209.85.208.176])
+ by inbound-smtp.eu-west-1.amazonaws.com with SMTP id 750lqqvher402u59u5ggcosn33slqtmnje6hq8o1
+ for yoman@ses.hechven.online;
+ Wed, 13 Aug 2025 17:11:30 +0000 (UTC)
+X-SES-Spam-Verdict: PASS
+X-SES-Virus-Verdict: PASS
+Received-SPF: pass (spfCheck: domain of _spf.google.com designates 209.85.208.176 as permitted sender) client-ip=209.85.208.176; envelope-from=leiman.baruch@gmail.com; helo=mail-lj1-f176.google.com;
+Authentication-Results: amazonses.com;
+ spf=pass (spfCheck: domain of _spf.google.com designates 209.85.208.176 as permitted sender) client-ip=209.85.208.176; envelope-from=leiman.baruch@gmail.com; helo=mail-lj1-f176.google.com;
+ dkim=pass header.i=@gmail.com;
+ dmarc=pass header.from=gmail.com;
+X-SES-RECEIPT: AEFBQUFBQUFBQUFHZUZ6byt2Lzdrb1lVWjJLcnovVlo1VUpHSWF4SmlNTGVHcmZBYUZVR3pEMjNWemdBZ1NSMVBYUGliMmJuQ0h2bnpBQ1dQMHN5M2Z6UmZiNU5QZm5TTTV0KzZsUXZ6SnRGRG5QTEFnVGU3amI0bjZJcll2ZFBCQVpDcUJtMEdhOFlocW1heG43NkRGbEFRVW5BSGpKTTdORjdQMXZySHVab3prU3VhVjFmS3lURVl0WkFoWEp6N3hDdGVKV2pxTTBvenpkenZMRUIrUHovT1lVVWtjUW5ud3hGbDVHZWE4VGF0T1AvTWJjb3N3ZlBjY1FINjBzbi9PQ2NZaVlEcm53eFROWm5hVTlCOThjbE1aZFgrWlA5a2xTb0RsNXNyTjJUeTdYeUN1Q2Z5RWc9PQ==
+X-SES-DKIM-SIGNATURE: a=rsa-sha256; q=dns/txt; b=eG1dxYpLmSYxbaIeBKKAHU3DNkwIgv8NXaMLd5qNsVFmz/BTOTxDSDndl41bXzsfoDL7croNcCDiMXuYwGrk5WhWniOmqmSl6Ya5Tsco8dgiIl5hzF9q/sdO85PnMyLnpenY/dqqkotvLc1ISNcmQ30faHFLybNMHAf+n6se+84=; c=relaxed/simple; s=ihchhvubuqgjsxyuhssfvqohv7z3u4hn; d=amazonses.com; t=1755105091; v=1; bh=xaZaWWHyXYwOU3iBUMtjF/d//s7kNyfjNxVgM5IxoVU=; h=From:To:Cc:Bcc:Subject:Date:Message-ID:MIME-Version:Content-Type:X-SES-RECEIPT;
+Received: by mail-lj1-f176.google.com with SMTP id 38308e7fff4ca-333f92b4072so163541fa.3
+        for <yoman@ses.hechven.online>; Wed, 13 Aug 2025 10:11:30 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20230601; t=1755105089; x=1755709889; darn=ses.hechven.online;
+        h=to:subject:message-id:date:from:mime-version:from:to:cc:subject
+         :date:message-id:reply-to;
+        bh=xaZaWWHyXYwOU3iBUMtjF/d//s7kNyfjNxVgM5IxoVU=;
+        b=Utzl1feblT1/BmMnlT8XHS0kfZbp6V6zR+6SA22VmFF1pPMnjDilpIJ/H0TXQKDTny
+         ozrzviiCcRDZ0RMK4f9cFSH9KNaGHKBlHGl1m1kxyfxzx36LcG0eXZWWOHdiAA5GYb3i
+         WLK+nMw+0VIJhp/tgvS/11mQ1YIGhnta7Yaq5Tt67b1366ge0Ay1z4Q+sGltuyFwSaVH
+         WsORMguFrgauXog1ezYgcTL80mE6NT1XU+8mhqIL1+pWik58SUvnV1mwSAS6lJVA614k
+         +QWiSQ2VSgirUkmMtXrh0ZhElYC3sHrSk/m3NkMPAPCkXdnU2n/vJYORRQMX8txltrTu
+         iwrQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20230601; t=1755105089; x=1755709889;
+        h=to:subject:message-id:date:from:mime-version:x-gm-message-state
+         :from:to:cc:subject:date:message-id:reply-to;
+        bh=xaZaWWHyXYwOU3iBUMtjF/d//s7kNyfjNxVgM5IxoVU=;
+        b=s24uzaXtS+kh3mOLHAvi61mkD4kdj2ntt3XzQJJUZjlagBoH9BYaFq+Iq3+o7+ipoc
+         m1wXcojpMl7K0X3Q/fKCVU7GAJ5BH5YMbNiTttlnSSvhWfi9s695oPFAWkXzrZQECvr8
+         ASHaEtGbgJzaoXfZ56GHnyn66BSsYhWn2hIZLIE14hX+G7lnFaYygZgk0NxVDKsZ7ThO
+         HOZxeBqwskvFbWd9s4JYp3fx+66TwoL/Ete07LOGeEZphfznj+UK+UglMhxFwOnESgAr
+         eCMRUfbld2pMUkp+DB/poKuqmb4dfZ8Q+tzz4r2e29hBQJmRQbg2AyNZxQIPw6ak2OC9
+         YAHA==
+X-Gm-Message-State: AOJu0YyodeYRTB3T9aTRX+NwnwKM67WFVrVA4aKHwr4KFWrVwamqVA/i
+	Sl1FQhYmRLF4/Wv8WVTtnjX3pbozQxTHFJKxAl6jJJ9vQ5lEDLVwQ+hrd0FS1fowiOUbyI8avHV
+	scBpiBe4wsl+t1hCKPtVqcTVO74fUuh+AaJv9R7A=
+X-Gm-Gg: ASbGnct++qFpahrthonwN3ap26c4qeigJbRdpVXgDh9HKzbIm/nObDCR8VuXIbjFzri
+	W2WrogV3YVnoWKMc3EZuzF20U9f/fnPLqualUtzBgOB1c0mNZO5ijstWlQvT2k7UocV12ZKWnNc
+	twNMAps9Yp1Hdgh6IzqjG1XvDigCy76HuiedJNTveqzMaIUrJXMz30ggxUT/d9HwnSalUk6O/1D
+	An/U7JN9EnkgRSPcfc=
+X-Google-Smtp-Source: AGHT+IHwUkBXWQDTe9QUYHsa8pnD5ezod1SiugE01Noi6OY92KZ9BonKHFg66PkJTyNsb9Clezg5C84t6qoQoUiPPSg=
+X-Received: by 2002:a05:651c:514:b0:332:133b:1513 with SMTP id
+ 38308e7fff4ca-333e9b40971mr9419551fa.30.1755105088320; Wed, 13 Aug 2025
+ 10:11:28 -0700 (PDT)
+MIME-Version: 1.0
+From: Baruch L <leiman.baruch@gmail.com>
+Date: Wed, 13 Aug 2025 20:11:02 +0300
+X-Gm-Features: Ac12FXyEs3iHqfmUpZze25CKtxMkvdVqWRJHniqrRjPLPLJ3FREjpQbTrS3NEvI
+Message-ID: <CADsj0Ovbef=nOVT_u8+Zvea+YjDSHZWnPsyzABdsGj4933BrwA@mail.gmail.com>
+Subject: test4
+To: yoman@ses.hechven.online
+Content-Type: multipart/alternative; boundary="000000000000553959063c423ff9"
+
+--000000000000553959063c423ff9
+Content-Type: text/plain; charset="UTF-8"
+
+this is test4
+:-) Baruch Leiman - +972-54-2206263
+
+--000000000000553959063c423ff9
+Content-Type: text/html; charset="UTF-8"
+
+<div dir="ltr"><div>this is test4</div><div><div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature"><div dir="ltr"><div><div dir="ltr">:-) Baruch Leiman - +972-54-2206263</div></div></div></div></div></div>
+
+--000000000000553959063c423ff9--
