@@ -1,0 +1,6 @@
+
+aws_region        = "eu-west-1"
+ses_domain        = "your-domain-here.com"
+ses_recipient_email = "parser@your-domain-here.com"
+aws_account         = "your-aws-account-id"
+lambda_function_name = "email_parser"
