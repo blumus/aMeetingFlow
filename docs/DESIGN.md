@@ -134,7 +134,24 @@ The project repository, `aMeetingFlow`, now has a clear directory structure:
 **DevContainer Setup**
 A DevContainer has been configured to standardize the development environment. It automatically installs the **AWS CLI**, **AWS SAM CLI**, and **Terraform** using a Python 3.11 base image. This ensures a consistent and repeatable setup for all developers.
 
-### Task 1.3: Email Parsing Service
+### Task 1.3: IaC for Email Parser
+
+The goal of this task is to define and deploy the infrastructure for the Email Parser Service using a combination of Terraform for the foundational resources and AWS SAM for the Lambda-specific application. This approach leverages the strengths of both tools to create a robust and efficient deployment pipeline.
+
+The IaC process will be split into two main components:
+
+1.  **Terraform for Foundational Infrastructure**:
+    * **AWS Simple Email Service (SES) Configuration**: We will use Terraform to provision the SES Identity (the domain) and the receipt rule. The receipt rule will be configured to trigger a Lambda function directly upon receiving an email.
+    * **AWS Identity and Access Management (IAM) Roles**: Terraform will define the IAM roles needed by the system. This includes the role for the Lambda function, which will have permissions to be invoked by SES and to write logs to CloudWatch.
+    * **AWS CloudWatch Logs**: A dedicated CloudWatch Log Group will be provisioned by Terraform to centralize the logs from the Lambda function. We will rely on CloudWatch's built-in filtering and analysis tools for monitoring.
+
+2.  **AWS SAM for the Serverless Application**:
+    * **SAM Template**: We will create a `template.yaml` file to define the Lambda function and its properties. This template will specify the Python runtime and the function's code location.
+    * **SAM Deployment**: The CI/CD pipeline (configured with GitHub Actions) will use the AWS SAM CLI to build, package, and deploy the application. It will automatically handle the creation of the Lambda function and its integration with the SES receipt rule that was provisioned by Terraform.
+
+This hybrid approach allows us to manage the core, project-wide infrastructure with Terraform, while using the developer-friendly features of SAM to efficiently build and deploy the serverless application code.
+
+### Task 1.4: Email Parsing Service
 
 * **Purpose**: Develop the core logic for the AWS Lambda function that parses email content.
 * **Technology**: The service will be written in Python.
@@ -142,7 +159,16 @@ A DevContainer has been configured to standardize the development environment. I
 * **Data Extraction**: The function will use regular expressions to extract key data points from the email body, including meeting date, time, and participant details.
 * **Output**: The extracted data will be formatted into a structured JSON payload and published to another SQS queue.
 
-### Task 1.4: CI/CD Pipeline
+### Task 1.5: Unit Testing
+
+Unit tests will be developed for the Email Parsing Service to ensure the parsing logic correctly extracts meeting details from a variety of email templates. These tests will cover:
+- Extraction of meeting date, time, and participant information
+- Handling of edge cases and template variations
+- Validation of output JSON structure
+
+Integration tests will also be implemented to validate the interaction between the Lambda function and the SQS queue, ensuring end-to-end reliability.
+
+### Task 1.6: CI/CD Pipeline
 
 * **Automation**: The project will use **GitHub Actions** to automate the deployment pipeline.
 * **Workflow**: The workflow will automatically run continuous integration (CI) tasks, such as testing and Terraform validation, and then execute `terraform plan` and `terraform apply` for continuous deployment (CD).

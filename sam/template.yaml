@@ -1,0 +1,35 @@
+# This SAM template defines the serverless application.
+# It specifies the Lambda function, its runtime, handler, and the IAM role.
+# This template is deployed by the AWS SAM CLI.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Email Parser Service
+
+# We will use the outputs from our Terraform script to configure this template
+
+Resources:
+  # The Lambda Function for Email Parsing
+  EmailParserFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: email_parser # The name of our Lambda function
+      Description: Parses email content for meeting details
+      Handler: lambda_function.handler # file.function
+      Runtime: python3.11
+      CodeUri: ../src/ # The directory containing our source code
+      MemorySize: 128
+      Timeout: 30
+  # Policies property removed; SES invoke permission will be handled by Lambda::Permission resource
+  EmailParserFunctionPermissionForSES:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref EmailParserFunction
+      Principal: ses.amazonaws.com
+  # Events property removed; SES will invoke via Terraform rule
+      
+Outputs:
+  EmailParserFunctionArn:
+    Description: "ARN of the Email Parser Lambda function"
+    Value: !GetAtt EmailParserFunction.Arn

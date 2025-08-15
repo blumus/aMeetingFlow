@@ -5,7 +5,7 @@
 | Field               | Value                        |
 |---------------------|------------------------------|
 | **Title**           | Meeting Flow Specification   |
-| **Version**         | 1.2                          |
+| **Version**         | 1.3                          |
 | **Status**          | In Progress                  |
 | **Owner**           | Baruch                       |
 | **Last Updated**    | August 11, 2025              |
@@ -313,9 +313,10 @@ The system must log key actions and events for traceability and support.
 - Basic monitoring and logging via free tier tools
 - Error reporting via console logs or simple dashboard
 
-### ❌ Not in Scope
-- CI/CD pipelines
-- Infrastructure-as-code
+
+### 🟡 Optional
+- CI/CD pipelines (e.g., GitHub Actions)
+- Infrastructure-as-code (e.g., Terraform)
 
 ---
 

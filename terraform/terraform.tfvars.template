@@ -1,0 +1,6 @@
+
+aws_region        = "eu-west-1"
+ses_domain        = "example.com"
+ses_recipient_email = "recipient@example.com"
+assume_role_arn     = "arn:aws:iam::your_aws_account_number:role/ExampleTerraformRole"
+lambda_function_arn  = "arn:aws:lambda:eu-west-1:your_aws_account_number:function:example_lambda"

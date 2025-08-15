@@ -1,0 +1,8 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "meeting-automation-service"
+region = "eu-west-1"
+confirm_changeset = true
+disable_rollback = false
+capabilities = "CAPABILITY_IAM"
+role_arn = "arn:aws:iam::my_awsacount_number:role/TerraformRole"
