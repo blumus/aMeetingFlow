@@ -1,0 +1,50 @@
+Return-Path: <example@gmail.com>
+Received: from mail-lj1-f176.google.com (mail-lj1-f176.google.com [209.85.208.176])
+ by inbound-smtp.eu-west-1.amazonaws.com with SMTP id [REDACTED]
+ for meetings@example-domain.com;
+ Wed, 13 Aug 2025 17:11:30 +0000 (UTC)
+X-SES-Spam-Verdict: PASS
+X-SES-Virus-Verdict: PASS
+Received-SPF: pass (spfCheck: domain of _spf.google.com designates 209.85.208.176 as permitted sender) client-ip=209.85.208.176; envelope-from=leiman.baruch@gmail.com; helo=mail-lj1-f176.google.com;
+Authentication-Results: amazonses.com;
+ spf=pass (spfCheck: domain of _spf.google.com designates 209.85.208.176 as permitted sender) client-ip=209.85.208.176; envelope-from=example@gmail.com; helo=mail-lj1-f176.google.com;
+ dkim=pass header.i=@gmail.com;
+ dmarc=pass header.from=gmail.com;
+X-SES-RECEIPT: [REDACTED_RECEIPT_TOKEN]
+X-SES-DKIM-SIGNATURE: [REDACTED_DKIM_SIGNATURE]
+Received: by mail-lj1-f176.google.com with SMTP id [REDACTED]
+        for <meetings@example-domain.com>; Wed, 13 Aug 2025 10:11:30 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20230601; t=1755105089; x=1755709889; darn=example-domain.com;
+        h=to:subject:message-id:date:from:mime-version:from:to:cc:subject
+         :date:message-id:reply-to;
+        bh=[REDACTED];
+        b=[REDACTED_SIGNATURE]
+X-Google-DKIM-Signature: [REDACTED_GOOGLE_DKIM]
+X-Gm-Message-State: [REDACTED_MESSAGE_STATE]
+X-Gm-Gg: [REDACTED_GM_GG]
+X-Google-Smtp-Source: [REDACTED_SMTP_SOURCE]
+X-Received: by 2002:a05:651c:514:b0:332:133b:1513 with SMTP id
+ [REDACTED_SMTP_ID]; Wed, 13 Aug 2025
+ 10:11:28 -0700 (PDT)
+MIME-Version: 1.0
+From: John Doe <example@gmail.com>
+Date: Wed, 13 Aug 2025 20:11:02 +0300
+X-Gm-Features: [REDACTED_GM_FEATURES]
+Message-ID: <[REDACTED_MESSAGE_ID]@mail.gmail.com>
+Subject: Test Email
+To: meetings@example-domain.com
+Content-Type: multipart/alternative; boundary="000000000000553959063c423ff9"
+
+--000000000000553959063c423ff9
+Content-Type: text/plain; charset="UTF-8"
+
+This is a test email
+:-) John Doe - +1XX-XXX-XXXX
+
+--000000000000553959063c423ff9
+Content-Type: text/html; charset="UTF-8"
+
+<div dir="ltr"><div>This is a test email</div><div><div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature"><div dir="ltr"><div><div dir="ltr">:-) John Doe - +1XX-XXX-XXXX</div></div></div></div></div></div>
+
+--000000000000553959063c423ff9--

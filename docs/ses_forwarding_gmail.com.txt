@@ -1,0 +1,73 @@
+Return-Path: <forwarding-noreply@google.com>
+Received: from mail-lf1-f51.google.com (mail-lf1-f51.google.com [209.85.167.51])
+ by inbound-smtp.eu-west-1.amazonaws.com with SMTP id [REDACTED]
+ for meetings@example-domain.com;
+ Wed, 13 Aug 2025 17:16:06 +0000 (UTC)
+X-SES-Spam-Verdict: PASS
+X-SES-Virus-Verdict: PASS
+Received-SPF: pass (spfCheck: domain of google.com designates 209.85.167.51 as permitted sender) client-ip=209.85.167.51; envelope-from=forwarding-noreply@google.com; helo=mail-lf1-f51.google.com;
+Authentication-Results: amazonses.com;
+ spf=pass (spfCheck: domain of google.com designates 209.85.167.51 as permitted sender) client-ip=209.85.167.51; envelope-from=forwarding-noreply@google.com; helo=mail-lf1-f51.google.com;
+ dkim=pass header.i=@google.com;
+ dmarc=pass header.from=google.com;
+X-SES-RECEIPT: [REDACTED_RECEIPT_TOKEN]
+X-SES-DKIM-SIGNATURE: [REDACTED_DKIM_SIGNATURE]
+Received: by mail-lf1-f51.google.com with SMTP id [REDACTED]
+        for <meetings@example-domain.com>; Wed, 13 Aug 2025 10:16:06 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=google.com; s=20230601; t=1755105366; x=1755710166; darn=example-domain.com;
+        h=to:from:subject:message-id:date:mime-version:from:to:cc:subject
+         :date:message-id:reply-to;
+        bh=[REDACTED];
+        b=[REDACTED_SIGNATURE]
+X-Google-DKIM-Signature: [REDACTED_GOOGLE_DKIM]
+X-Gm-Message-State: [REDACTED_MESSAGE_STATE]
+X-Gm-Gg: [REDACTED_GM_GG]
+X-Google-Smtp-Source: [REDACTED_SMTP_SOURCE]
+MIME-Version: 1.0
+X-Received: by 2002:a19:6b19:0:b0:55b:57e8:16ae with SMTP id
+ [REDACTED_SMTP_ID]; Wed, 13 Aug 2025
+ 10:16:05 -0700 (PDT)
+X-Google-Address-Confirmation: [REDACTED_CONFIRMATION]
+Date: Wed, 13 Aug 2025 20:16:05 +0300
+X-Gm-Features: [REDACTED_GM_FEATURES]
+Message-ID: <[REDACTED_MESSAGE_ID]@mail.gmail.com>
+Subject: Gmail Forwarding Confirmation - Receive Mail from example@gmail.com
+From: Gmail Team <forwarding-noreply@google.com>
+To: meetings@example-domain.com
+Content-Type: text/plain; charset="UTF-8"
+
+example@gmail.com has requested to automatically forward mail to
+your email
+address meetings@example-domain.com.
+
+To allow example@gmail.com to forward mail to your address automatically,
+please click the link below to confirm the request:
+
+[REDACTED_VERIFICATION_LINK]
+
+If you click the link and it appears to be broken, please copy and paste it
+into a new browser window.
+
+Thanks for using Gmail!
+
+Sincerely,
+
+The Gmail Team
+
+If you do not approve of this request, no further action is required.
+example@gmail.com cannot automatically forward messages to your
+email address
+unless you confirm the request by clicking the link above. If you accidentally
+clicked the link, but you do not want to allow example@gmail.com to
+automatically forward messages to your address, click this link to cancel this
+verification:
+[REDACTED_CANCELLATION_LINK]
+
+To learn more about why you might have received this message, please
+visit: http://support.google.com/mail/bin/answer.py?answer=184973.
+
+Please do not respond to this message. If you'd like to contact the
+Google.com Team, please log in to your account and click 'Help' at
+the top of any page. Then, click 'Contact Us' along the bottom of the
+Help Center.

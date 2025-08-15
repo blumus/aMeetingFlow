@@ -117,6 +117,22 @@ Upon successful completion of the PoC, all created resources and settings were r
 * **AWS Account**: The existing AWS account `[REDACTED]` will be used. This account is in its first year and is within the free tier, which aligns with the project's low-cost hosting strategy. The account is also designated for potential future projects.
 * **IAM Roles**: IAM roles will be configured with the principle of least privilege, ensuring each service has only the necessary permissions.
 * **Secure Credentials**: AWS access credentials will be securely stored in **GitHub Secrets** for use by the CI/CD pipeline.
+#### **IAM Roles for Meeting Automation Service**
+
+* **Terraform Deployment Role:** `MeetingAutomationService-Terraform-Deployment-Role` is used by CI/CD to deploy infrastructure with `PowerUserAccess`. It uses temporary credentials to prevent long-term access key risks.
+* **Development Service Account:** `MeetingAutomationService-Developer-Account` provides developers with `AdministratorAccess` and `SystemAdministrator` policies for full resource management during development.
+#### **Project Documentation Summary**
+
+**Repository Structure**
+The project repository, `aMeetingFlow`, now has a clear directory structure:
+* **`docs/`**: All project documentation.
+* **`src/`**: Source code for non-SAM functions.
+* **`terraform/`**: Terraform infrastructure code.
+* **`.github/workflows/`**: GitHub Actions for CI/CD.
+* **`.devcontainer/`**: DevContainer configuration.
+
+**DevContainer Setup**
+A DevContainer has been configured to standardize the development environment. It automatically installs the **AWS CLI**, **AWS SAM CLI**, and **Terraform** using a Python 3.11 base image. This ensures a consistent and repeatable setup for all developers.
 
 ### Task 1.3: Email Parsing Service
 
