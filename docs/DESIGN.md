@@ -17,6 +17,28 @@
 
 ### Summary of Requirements & Architecture for Phase 1
 
+
+## 🖥️ Lambda Functions Overview (Explicit)
+
+The system uses three main AWS Lambda functions, each with a distinct responsibility:
+
+1. **Email Parser Lambda**
+    - Trigger: SQS message (from SES receipt rule)
+    - Function: Parses meeting details from forwarded emails and outputs structured JSON to SQS.
+    - Task 1.4: Email Parsing Service
+
+2. **Meeting Management Lambda**
+    - Trigger: SQS message (from Email Parser Lambda)
+    - Function: Stores meeting data in DynamoDB and manages meeting records.
+
+3. **Notification Logic Lambda**
+    - Trigger: Scheduled (EventBridge)
+    - Function: Queries DynamoDB for upcoming meetings, creates Zoom meetings, and sends WhatsApp notifications.
+
+This explicit separation ensures clarity in the system's event-driven workflow and aligns with the architecture and project plan.
+
+---
+
 This phase focuses on the **Email Parser Service**, a core component of the system's architecture. The service is designed to be serverless and event-driven, operating on **Amazon Web Services (AWS)**.
 
 The primary function of this service is to parse meeting details from forwarded emails. The system uses a non-intrusive design where relevant emails are forwarded from a user's personal Gmail account to a dedicated, service-owned inbox. The service itself never accesses the user's personal inbox.
@@ -173,10 +195,6 @@ Integration tests will also be implemented to validate the interaction between t
 * **Automation**: The project will use **GitHub Actions** to automate the deployment pipeline.
 * **Workflow**: The workflow will automatically run continuous integration (CI) tasks, such as testing and Terraform validation, and then execute `terraform plan` and `terraform apply` for continuous deployment (CD).
 
-### Task 1.5: Testing
-
-* **Unit Tests**: Unit tests will be written for the Email Parsing Service to ensure the parsing logic correctly extracts data from a variety of email templates.
-* **Integration Tests**: The CI/CD pipeline will be configured to run tests that validate the interaction between the AWS Lambda function and the SQS queue.
 
 ---
 
@@ -189,3 +207,171 @@ The following are implicit requirements and considerations identified during the
 * **User Authentication and Authorization**: While the system is designed to be multi-user ready, the specific authentication mechanism (e.g., Google OAuth, email/password) has not been selected yet. This will need to be decided before developing the front-end and backend server layers.
 * **Template Management**: The system uses different WhatsApp templates based on the number of participants. The design documents do not specify how these templates are stored, managed, or edited within the system. This will need to be a part of the design for the Meeting Management Service.
 * **Error Reporting and Monitoring**: The project plan mentions basic logging and error reporting via console logs or a simple dashboard. A more robust monitoring and alerting strategy for a production environment will need to be defined.
+## Email System Security Protection Against Hackers
+
+> **Note:** This response might contain security-related information. Verify using informed human judgement. See [Security in Amazon Q Developer](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/security.html) for details.
+
+Protecting your email system against hackers involves addressing current risks and hardening security.  
+
+### Current Security Risks
+
+#### 1. Email Injection Attacks
+- Malicious emails could trigger your Lambda
+- Potential code injection through email content
+- Spam/phishing emails processed
+
+#### 2. Lambda Function Vulnerabilities
+- No input validation on email content
+- Potential for resource exhaustion
+- Sensitive data exposure in logs
+
+#### 3. Open Email Endpoint
+- Anyone can send emails to `receive@receive.hechven.online`
+- No sender authentication
+- No rate limiting
+
+### Security Hardening Steps
+
+#### 1. Input Validation & Sanitization
+
+```python
+import re
+import html
+import bleach
+
+def lambda_handler(event, context):
+    for record in event['Records']:
+        try:
+            sender = record['ses']['mail']['source']
+            if not is_trusted_sender(sender):
+                print(f"Rejected email from untrusted sender: {sender}")
+                return {'statusCode': 200}
+            email_content = get_email_content(record)
+            sanitized_content = sanitize_input(email_content)
+            process_meeting_request(sanitized_content)
+        except Exception as e:
+            print(f"Security error: {str(e)}")
+            return {'statusCode': 400}
+
+def is_trusted_sender(email):
+    trusted_domains = ['yourcompany.com', 'trusted-partner.com']
+    domain = email.split('@')[1].lower()
+    return domain in trusted_domains
+
+def sanitize_input(content):
+    clean_content = bleach.clean(content, strip=True)
+    safe_content = html.escape(clean_content)
+    return safe_content
+```
+
+#### 2. Rate Limiting & DDoS Protection
+
+```bash
+aws cloudwatch put-metric-alarm \
+--alarm-name "email-parser-high-invocations" \
+--alarm-description "Too many email processing requests" \
+--metric-name Invocations \
+--namespace AWS/Lambda \
+--statistic Sum \
+--period 300 \
+--threshold 100 \
+--comparison-operator GreaterThanThreshold \
+--dimensions Name=FunctionName,Value=email_parser
+```
+
+#### 3. Sender Authentication
+
+```python
+def verify_email_authenticity(ses_receipt):
+    verdict = ses_receipt.get('spfVerdict', {})
+    dkim_verdict = ses_receipt.get('dkimVerdict', {})
+    if verdict.get('status') != 'PASS':
+        print("SPF verification failed")
+        return False
+    if dkim_verdict.get('status') != 'PASS':
+        print("DKIM verification failed") 
+        return False
+    return True
+```
+
+#### 4. Enable SES Security Features
+
+```bash
+aws ses update-receipt-rule --rule-set-name main-rule-set --rule '{
+"Name": "email-parser-rule",
+"Enabled": true,
+"Recipients": ["receive@receive.hechven.online"],
+"TlsPolicy": "Require",
+"ScanEnabled": true,
+"Actions": [
+  {
+    "LambdaAction": {
+      "FunctionArn": "arn:aws:lambda:eu-west-1:571600832589:function:email_parser"
+    }
+  }
+]
+}'
+```
+
+#### 5. Lambda Security Hardening
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream", 
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:aws:s3:::your-email-bucket/*"
+    }
+  ]
+}
+```
+
+#### 6. Monitoring & Alerting
+
+```bash
+aws logs put-metric-filter \
+--log-group-name "/aws/lambda/email_parser" \
+--filter-name "SecurityFailures" \
+--filter-pattern "ERROR Security" \
+--metric-transformations \
+metricName=SecurityFailures,metricNamespace=EmailSecurity,metricValue=1
+```
+
+#### 7. Emergency Shutdown
+
+```bash
+#!/bin/bash
+echo "🚨 EMERGENCY SHUTDOWN ACTIVATED"
+aws ses set-active-receipt-rule-set
+aws lambda update-function-configuration --function-name email_parser --environment Variables='{EMERGENCY_STOP=true}'
+echo "✅ Email system DISABLED"
+```
+
+### Best Practices Summary
+- Whitelist trusted senders only  
+- Enable TLS requirement  
+- Enable spam/virus scanning  
+- Validate and sanitize all input  
+- Use minimal IAM permissions  
+- Monitor for suspicious activity  
+- Have emergency shutdown ready  
+- Regular security reviews  
+
+#### Quick Security Check
+
+```bash
+aws ses describe-receipt-rule --rule-set-name main-rule-set --rule-name email-parser-rule
+```

@@ -14,6 +14,23 @@ This phase combines all tasks necessary to get the first core service fully func
 * **Task 1.2: AWS Account & Repo Setup:** Create a dedicated AWS account, set up IAM roles, and configure the project repository on GitHub.
 * **Task 1.3: IaC for Email Parser:** Write and deploy the Terraform scripts to provision the AWS Lambda function, SQS queue, and necessary permissions for the Email Parsing Service.
 * **Task 1.4: Coding - Email Parser Service:** Write the Python code for the Lambda function that consumes SQS messages and parses email content.
+## Task 1.4: Coding - Email Parser Service
+
+### Steps:
+1. Start the Infrastructure as Code (IaC) pipeline to deploy/update resources (Lambda, SES, etc.).
+2. Send a test email to the configured SES address.
+3. Observe and document the current system behavior:
+	- Check AWS CloudWatch logs for Lambda execution details.
+	- Note any errors, unexpected results, or missing functionality.
+4. Only after observing, begin coding or fixing the email parser service as needed.
+5. Optionally, add SES filters to ensure only the "right emails" are processed (e.g., by sender, subject, etc.).
+
+### Additional Suggestions:
+- Document the observed behavior/results after sending the test email.
+- Confirm the IaC pipeline deploys all necessary resources.
+- Ensure access to AWS CloudWatch for Lambda logs and troubleshooting.
+- Clarify criteria for SES filters ("right emails").
+
 * **Task 1.5: Unit Testing:** Write and execute unit tests for the parsing logic to ensure it correctly extracts data from various email templates.
 * **Task 1.6: CI/CD Pipeline Integration:** Configure the GitHub Actions workflow to automatically test and deploy the `Email Parser Service` when code changes are pushed.
 

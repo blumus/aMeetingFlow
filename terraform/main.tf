@@ -98,6 +98,7 @@ resource "aws_ses_receipt_rule" "email_parser_rule" {
   name          = "email-parser-rule"
   rule_set_name = aws_ses_receipt_rule_set.main_rule_set.rule_set_name
   recipients    = [var.ses_recipient_email]
+  enabled       = true
 
   lambda_action {
     function_arn = var.lambda_function_arn
@@ -106,4 +107,23 @@ resource "aws_ses_receipt_rule" "email_parser_rule" {
     invocation_type = "Event"
   }
   depends_on = [aws_ses_receipt_rule_set.main_rule_set]
+}
+
+# Activate the SES receipt rule set after apply
+resource "null_resource" "activate_rule_set" {
+  provisioner "local-exec" {
+    command = "aws ses set-active-receipt-rule-set --rule-set-name main-rule-set"
+  }
+  depends_on = [aws_ses_receipt_rule_set.main_rule_set]
+}
+
+# Output for SES MX record DNS configuration
+output "ses_mx_record" {
+  description = "Add this MX record to your DNS to enable SES email receiving."
+  value = {
+  name     = "${var.ses_domain}"
+    type     = "MX"
+    priority = 10
+    value    = "inbound-smtp.${var.aws_region}.amazonaws.com"
+  }
 }
