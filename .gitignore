@@ -1,7 +1,26 @@
-terraform.tfvars
-samconfig.toml
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# AWS SAM
+.aws-sam/
+
+# Terraform
 *.tfstate
-*.tfstate.backup
+*.tfstate.*
 .terraform/
 .terraform.lock.hcl
-.aws-sam
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config files with secrets
+terraform.tfvars
+samconfig.toml

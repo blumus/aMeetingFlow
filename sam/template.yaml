@@ -9,27 +9,97 @@ Description: Email Parser Service
 # We will use the outputs from our Terraform script to configure this template
 
 Resources:
+  # S3 Bucket for Email Storage (Extension of Lambda - temporary storage for processing)
+  EmailStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-email-storage"
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteEmailsAfter7Days
+            Status: Enabled
+            ExpirationInDays: 7
+
+  # S3 Bucket Policy - Allow SES to write emails for Lambda processing
+  EmailStorageBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref EmailStorageBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${EmailStorageBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+
+  # IAM Role for Lambda Function
+  EmailParserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3EmailAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub "${EmailStorageBucket.Arn}/*"
+        - PolicyName: SESEmailSending
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+
   # The Lambda Function for Email Parsing
   EmailParserFunction:
     Type: 'AWS::Serverless::Function'
     Properties:
-      FunctionName: email_parser # The name of our Lambda function
-      Description: Parses email content for meeting details
-      Handler: lambda_function.handler # file.function
+      FunctionName: email_parser
+      Description: Parses email content and sends reply with meeting details
+      Handler: lambda_function.handler
       Runtime: python3.11
-      CodeUri: ../src/ # The directory containing our source code
+      CodeUri: ../src/
       MemorySize: 128
-      Timeout: 30
-  # Policies property removed; SES invoke permission will be handled by Lambda::Permission resource
+      Timeout: 60
+      Role: !GetAtt EmailParserRole.Arn
+
+  # Permission for SES to invoke Lambda
   EmailParserFunctionPermissionForSES:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref EmailParserFunction
       Principal: ses.amazonaws.com
-  # Events property removed; SES will invoke via Terraform rule
       
 Outputs:
   EmailParserFunctionArn:
     Description: "ARN of the Email Parser Lambda function"
     Value: !GetAtt EmailParserFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EmailParserFunctionArn"
+  
+  EmailStorageBucketName:
+    Description: "Name of the S3 bucket for email storage"
+    Value: !Ref EmailStorageBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-EmailStorageBucketName"

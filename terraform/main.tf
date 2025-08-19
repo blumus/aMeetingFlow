@@ -31,6 +31,12 @@ variable "lambda_function_arn" {
   type        = string
 }
 
+variable "sam_stack_name" {
+  description = "Name of the SAM stack to import S3 bucket from"
+  type        = string
+  default     = "meeting-automation-service"
+}
+
 # =============================================================================
 # PROVIDER CONFIGURATION
 # =============================================================================
@@ -45,12 +51,41 @@ provider "aws" {
 }
 
 # =============================================================================
+# DATA SOURCES
+# =============================================================================
+
+# Import S3 bucket created by SAM
+data "aws_cloudformation_export" "email_storage_bucket" {
+  name = "${var.sam_stack_name}-EmailStorageBucketName"
+}
+
+# =============================================================================
 # RESOURCES
 # =============================================================================
 
+# S3 Event Notification to trigger Lambda when email arrives
+resource "aws_s3_bucket_notification" "email_notification" {
+  bucket = data.aws_cloudformation_export.email_storage_bucket.value
+
+  lambda_function {
+    lambda_function_arn = var.lambda_function_arn
+    events              = ["s3:ObjectCreated:*"]
+  }
+
+  depends_on = [aws_lambda_permission.s3_invoke_lambda]
+}
+
+# Permission for S3 to invoke Lambda
+resource "aws_lambda_permission" "s3_invoke_lambda" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = var.lambda_function_arn
+  principal     = "s3.amazonaws.com"
+  source_arn    = "arn:aws:s3:::${data.aws_cloudformation_export.email_storage_bucket.value}"
+}
+
 # AWS SES Configuration
-# This sets up the domain identity and the receipt rule to trigger the Lambda.
-# You must first verify your domain or email identity in AWS SES.
+# This sets up the domain identity and the receipt rule to store emails in S3.
 resource "aws_ses_domain_identity" "meeting_flow_domain" {
   domain = var.ses_domain
 }
@@ -69,11 +104,9 @@ resource "aws_ses_receipt_rule" "email_parser_rule" {
   recipients    = [var.ses_recipient_email]
   enabled       = true
 
-  lambda_action {
-    function_arn    = var.lambda_function_arn
-    position        = 1
-    topic_arn       = ""
-    invocation_type = "Event"
+  s3_action {
+    bucket_name = data.aws_cloudformation_export.email_storage_bucket.value
+    position    = 1
   }
   depends_on = [aws_ses_receipt_rule_set.main_rule_set]
 }
