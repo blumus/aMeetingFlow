@@ -6,6 +6,44 @@ This project automates the extraction of meeting details from incoming emails an
 
 # Deployment and Teardown Instructions
 
+## Quick Start (Automated)
+
+For automated deployment using the included Makefile:
+
+```bash
+# Run all checks (linting, validation)
+make check
+
+# Deploy everything (SAM + Terraform)
+make deploy
+```
+
+## Available Makefile Targets
+
+### Development
+- `make install` - Install development dependencies (ruff, mypy)
+- `make format` - Format code with ruff
+- `make lint` - Run linting and type checking
+- `make fix` - Auto-fix issues and format code
+- `make check` - Run all validation checks
+
+### SAM Deployment
+- `make build` - Build SAM application (includes linting)
+- `make sam-deploy` - Deploy SAM stack
+- `make sam-force-deploy` - Force redeploy SAM stack
+
+### Terraform Deployment
+- `make terraform-plan` - Show Terraform changes
+- `make terraform-apply` - Apply Terraform changes (with confirmation)
+- `make terraform-auto-deploy` - Apply Terraform changes (no confirmation)
+
+### Combined Deployment
+- `make deploy` - Full deployment (SAM + Terraform, automated)
+
+## Manual Deployment (Alternative)
+
+If you prefer manual deployment or need more control:
+
 ## Prerequisites
 -
 ## IAM Role Setup for Deployment
@@ -60,8 +98,9 @@ Once the role is created, use its ARN in your `samconfig.toml` and trust policy 
 - Terraform installed
 - IAM permissions to assume roles and manage resources
 
-## Deployment Steps
+## Manual Deployment Steps
 
+**Note:** You can use `make deploy` for automated deployment after configuration. The manual steps below are provided for reference and troubleshooting.
 
 ### 0. IAM Role Trust Policy Setup (Best Practice)
 
@@ -190,7 +229,7 @@ This enables DKIM signing and DMARC policy for your domain. Do not use the sampl
 
 ## Undo/Teardown Steps
 
-### 1. Remove AWS Resources
+### Option 1: Manual Teardown
 
 - Delete SAM stack:
   ```bash
@@ -199,9 +238,21 @@ This enables DKIM signing and DMARC policy for your domain. Do not use the sampl
   ```
 - Destroy Terraform resources:
   ```bash
-  cd ../terraform
+  cd terraform
   terraform destroy -var-file=terraform.tfvars
   ```
+
+### Option 2: Using Terraform Only
+
+If you used `make deploy`, you can destroy Terraform resources with:
+```bash
+cd terraform
+terraform destroy -var-file=terraform.tfvars
+```
+
+Note: SAM stack deletion still needs to be done manually as shown above.
+
+### Continue with cleanup:
 
 - Remove configuration files:
   ```bash
