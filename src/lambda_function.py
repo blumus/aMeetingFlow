@@ -108,6 +108,7 @@ def sanitize_for_log(value: Any) -> str:
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
+    key = "unknown"  # Default for error logging
     try:
         # Validate S3 event structure
         if not event.get("Records") or not event["Records"]:
@@ -164,7 +165,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
         return {"statusCode": 200}
 
     except Exception as e:
-        logger.error(f"Error: {sanitize_for_log(str(e))}")
+        logger.error(f"Error processing S3 object {sanitize_for_log(key)}: {sanitize_for_log(str(e))}")
         return {"statusCode": 500}
 
 
