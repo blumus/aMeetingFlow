@@ -174,7 +174,7 @@ def decode_html_content(content: str) -> Optional[str]:
     html_match = BASE64_HTML_REGEX.search(content)
     if html_match:
         base64_content = html_match.group(1).replace("\n", "").replace("\r", "")
-        logger.info(f"Base64 HTML content found: {len(base64_content)} characters")
+        logger.debug(f"Base64 HTML content found: {len(base64_content)} characters")
         try:
             from base64 import b64decode
 
@@ -186,7 +186,7 @@ def decode_html_content(content: str) -> Optional[str]:
     html_match = QUOTED_HTML_REGEX.search(content)
     if html_match:
         html_content = html_match.group(1)
-        logger.info(f"Quoted-printable HTML content found: {sanitize_for_log(html_content[:200])}")
+        logger.debug(f"Quoted-printable HTML content found: {sanitize_for_log(html_content[:200])}")
         try:
             return decodestring(html_content).decode("utf-8")
         except UnicodeDecodeError:
@@ -223,7 +223,7 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
         if len(groups) != 4:
             raise ValueError(f"Date regex returned {len(groups)} groups, expected 4")
         day, month_heb, year, time = groups
-        logger.info(f"Date match: {sanitize_for_log(match.groups())}")
+        logger.debug(f"Date match: {sanitize_for_log(match.groups())}")
         month = HEBREW_MONTHS.get(month_heb)
         if month is None:
             logger.warning(
@@ -240,25 +240,25 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
     client = _safe_regex_extract(CLIENT_REGEX, decoded_html, "client")
     if client:
         details["client"] = client
-        logger.info(f"Client found: {sanitize_for_log(client)}")
+        logger.debug(f"Client found: {sanitize_for_log(client)}")
 
     # Extract phone
     phone = _safe_regex_extract(PHONE_REGEX, decoded_html, "phone")
     if phone:
         details["phone"] = phone
-        logger.info(f"Phone found: {sanitize_for_log(phone)}")
+        logger.debug(f"Phone found: {sanitize_for_log(phone)}")
 
     # Extract client email
     email = _safe_regex_extract(EMAIL_REGEX, decoded_html, "email")
     if email:
         details["email"] = email
-        logger.info(f"Client email found: {sanitize_for_log(email)}")
+        logger.debug(f"Client email found: {sanitize_for_log(email)}")
 
     return details
 
 
 def parse_email(content: str) -> Optional[Dict[str, str]]:
-    logger.info(f"Email content preview: {sanitize_for_log(content[:500])}")
+    logger.debug(f"Email content preview: {sanitize_for_log(content[:500])}")
 
     # Extract From address for reply
     from_match = search(r"From: ([^\n]+)", content)
@@ -267,14 +267,14 @@ def parse_email(content: str) -> Optional[Dict[str, str]]:
         return None
 
     from_address = from_match.group(1).strip()
-    logger.info(f"From address: {sanitize_for_log(from_address)}")
+    logger.debug(f"From address: {sanitize_for_log(from_address)}")
 
     # Check if this is from a supported domain
     if not any(domain in content for domain in SUPPORTED_DOMAINS):
         logger.info("Not a supported email domain")
         return None
 
-    logger.info("Found supported domain email")
+    logger.debug("Found supported domain email")
     details = {"from": from_address}
 
     # Decode HTML content
@@ -282,13 +282,13 @@ def parse_email(content: str) -> Optional[Dict[str, str]]:
     if not decoded_html:
         return details
 
-    logger.info(f"Decoded HTML: {sanitize_for_log(decoded_html[:300])}")
+    logger.debug(f"Decoded HTML: {sanitize_for_log(decoded_html[:300])}")
 
     # Extract meeting details
     meeting_data = extract_meeting_details(decoded_html)
     details.update(meeting_data)
 
-    logger.info(f"Final details: {sanitize_for_log(details)}")
+    logger.debug(f"Final details: {sanitize_for_log(details)}")
     return details if len(details) >= MIN_MEETING_FIELDS else None
 
 
