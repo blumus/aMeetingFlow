@@ -63,7 +63,7 @@ WHATSAPP_MESSAGE_TEMPLATE = """שלום {client},
 - מומלץ להיות במקום שקט, ללא הפרעות, כדי שנוכל להתמקד בצורה מיטבית.
 
 מצפה לשיחה שלנו,
-ברוך ליימן
+{consultant_name}
 יועץ הכוון מטעם פעמונים"""
 
 # HTML email template
@@ -302,6 +302,16 @@ def extract_email_address(from_field: str) -> str:
     return from_field
 
 
+def extract_consultant_name(from_field: str) -> str:
+    """Extract consultant name from 'Name <email>' format."""
+    if "<" in from_field and ">" in from_field:
+        try:
+            return from_field.split("<")[0].strip()
+        except IndexError:
+            return "ברוך ליימן"  # fallback
+    return from_field.strip()
+
+
 def generate_whatsapp_text(details: Dict[str, str]) -> str:
     """Generate WhatsApp message text."""
     # Calculate day of week
@@ -317,11 +327,15 @@ def generate_whatsapp_text(details: Dict[str, str]) -> str:
                 f"Error parsing date {sanitize_for_log(day)}/{sanitize_for_log(month)}/{sanitize_for_log(year)}: {sanitize_for_log(e)}"
             )
 
+    # Extract consultant name from From field
+    consultant_name = extract_consultant_name(details.get('from', ''))
+
     return WHATSAPP_MESSAGE_TEMPLATE.format(
         client=details.get('client', ''),
         day_name=day_name,
         date=details.get('date', '').replace('/', '.'),
-        time=details.get('time', '')
+        time=details.get('time', ''),
+        consultant_name=consultant_name
     )
 
 
