@@ -1,8 +1,8 @@
 from datetime import datetime
 from html import escape
 from logging import INFO, getLogger
-from re import DOTALL, MULTILINE, compile, search
-from typing import Any, Dict, Optional
+from re import DOTALL, MULTILINE, Match, Pattern, compile, search
+from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
 
 from boto3 import client
@@ -25,7 +25,7 @@ DECODED_HTML_PREVIEW_LENGTH = 300
 MIN_MEETING_FIELDS = 3  # from + at least 2 meeting fields (date/time, client, etc.)
 
 # Hebrew month names to numbers mapping
-HEBREW_MONTHS = {
+HEBREW_MONTHS: Dict[str, str] = {
     "ינואר": "01",
     "פברואר": "02",
     "מרץ": "03",
@@ -41,10 +41,10 @@ HEBREW_MONTHS = {
 }
 
 # Supported email domains for meeting automation
-SUPPORTED_DOMAINS = ["yoman.co.il", "tagatime.com"]
+SUPPORTED_DOMAINS: List[str] = ["yoman.co.il", "tagatime.com"]
 
 # Hebrew day names for weekday conversion
-HEBREW_DAYS = [
+HEBREW_DAYS: List[str] = [
     "יום שני",
     "יום שלישי",
     "יום רביעי",
@@ -91,14 +91,14 @@ HTML_EMAIL_TEMPLATE = """<html><body style="font-family: Arial, sans-serif; dire
 </body></html>"""
 
 # Compiled regex patterns for Hebrew email parsing
-DATE_REGEX = compile(r"(\d{1,2}) ([^\s]+) (\d{4}) בשעה (\d{1,2}:\d{2})")
-CLIENT_REGEX = compile(r"פרטי קשר: <b>([^<]+)</b>")
-PHONE_REGEX = compile(r"נייד: ([0-9]+)")
-EMAIL_REGEX = compile(r'דוא&quot;ל: <a href="mailto:([^"]+)"')
+DATE_REGEX: Pattern[str] = compile(r"(\d{1,2}) ([^\s]+) (\d{4}) בשעה (\d{1,2}:\d{2})")
+CLIENT_REGEX: Pattern[str] = compile(r"פרטי קשר: <b>([^<]+)</b>")
+PHONE_REGEX: Pattern[str] = compile(r"נייד: ([0-9]+)")
+EMAIL_REGEX: Pattern[str] = compile(r'דוא&quot;ל: <a href="mailto:([^"]+)"')
 
 # Compiled regex patterns for HTML content parsing
-BASE64_HTML_REGEX = compile(r"Content-Type: text/html[^\r\n]*\r?\nContent-Transfer-Encoding: base64\r?\n\r?\n([^-]+)", DOTALL)
-QUOTED_HTML_REGEX = compile(r"Content-Type: text/html[^\r\n]*\r?\n[^\r\n]*\r?\n\r?\n([^\r\n-]+)", DOTALL | MULTILINE)
+BASE64_HTML_REGEX: Pattern[str] = compile(r"Content-Type: text/html[^\r\n]*\r?\nContent-Transfer-Encoding: base64\r?\n\r?\n([^-]+)", DOTALL)
+QUOTED_HTML_REGEX: Pattern[str] = compile(r"Content-Type: text/html[^\r\n]*\r?\n[^\r\n]*\r?\n\r?\n([^\r\n-]+)", DOTALL | MULTILINE)
 
 
 def sanitize_for_log(value: Any) -> str:
@@ -114,14 +114,14 @@ def sanitize_for_log(value: Any) -> str:
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
-    key = "unknown"  # Default for error logging
+    key: str = "unknown"  # Default for error logging
     try:
         # Validate S3 event structure
         if not event.get("Records") or not event["Records"]:
             logger.error("No Records found in event")
             return {"statusCode": 400}
 
-        record = event["Records"][0]
+        record: Dict[str, Any] = event["Records"][0]
         if (
             "s3" not in record
             or "bucket" not in record["s3"]
@@ -131,15 +131,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
             return {"statusCode": 400}
 
         # Get S3 object details from S3 event
-        bucket = record["s3"]["bucket"]["name"]
+        bucket: str = record["s3"]["bucket"]["name"]
         key = record["s3"]["object"]["key"]
 
         # Get email content from S3
         try:
-            response = s3.get_object(Bucket=bucket, Key=key)
-            email_content = response["Body"].read().decode("utf-8")
+            response: Any = s3.get_object(Bucket=bucket, Key=key)
+            email_content: str = response["Body"].read().decode("utf-8")
         except Exception as e:
-            error_code = (
+            error_code: str = (
                 getattr(e, "response", {}).get("Error", {}).get("Code", "Unknown")
             )
             if error_code == "NoSuchKey":
@@ -151,7 +151,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
             return {"statusCode": 500}
 
         # Parse email
-        meeting_details = parse_email(email_content)
+        meeting_details: Optional[Dict[str, str]] = parse_email(email_content)
         if not meeting_details:
             logger.error("Email parsing failed")
             return {"statusCode": 422}  # Unprocessable Entity
@@ -178,9 +178,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
 def decode_html_content(content: str) -> Optional[str]:
     from quopri import decodestring
 
-    html_match = BASE64_HTML_REGEX.search(content)
+    html_match: Optional[Match[str]] = BASE64_HTML_REGEX.search(content)
     if html_match:
-        base64_content = html_match.group(1).replace("\n", "").replace("\r", "")
+        base64_content: str = html_match.group(1).replace("\n", "").replace("\r", "")
         logger.debug(f"Base64 HTML content found: {len(base64_content)} characters")
         try:
             from base64 import b64decode
@@ -192,7 +192,7 @@ def decode_html_content(content: str) -> Optional[str]:
 
     html_match = QUOTED_HTML_REGEX.search(content)
     if html_match:
-        html_content = html_match.group(1)
+        html_content: str = html_match.group(1)
         logger.debug(f"Quoted-printable HTML content found: {sanitize_for_log(html_content[:HTML_PREVIEW_LENGTH])}")
         try:
             return decodestring(html_content).decode("utf-8")
@@ -210,10 +210,10 @@ def decode_html_content(content: str) -> Optional[str]:
     return None
 
 
-def _safe_regex_extract(regex: Any, html: str, field_name: str, extractor_func: Optional[Any] = None) -> Optional[Any]:
+def _safe_regex_extract(regex: Pattern[str], html: str, field_name: str, extractor_func: Optional[Callable[[Match[str]], Any]] = None) -> Optional[Any]:
     """Helper function for safe regex extraction with consistent error handling."""
     try:
-        match = regex.search(html)
+        match: Optional[Match[str]] = regex.search(html)
         if match:
             return extractor_func(match) if extractor_func else match.group(1)
         return None
@@ -222,16 +222,20 @@ def _safe_regex_extract(regex: Any, html: str, field_name: str, extractor_func: 
 
 
 def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
-    details = {}
+    details: Dict[str, str] = {}
 
     # Extract date with custom logic
-    def extract_date(match: Any) -> Dict[str, str]:
-        groups = match.groups()
+    def extract_date(match: Match[str]) -> Dict[str, str]:
+        groups: tuple[str, ...] = match.groups()
         if len(groups) != 4:  # day, month, year, time
             raise ValueError(f"Date regex returned {len(groups)} groups, expected 4")
+        day: str
+        month_heb: str
+        year: str
+        time: str
         day, month_heb, year, time = groups
         logger.debug(f"Date match: {sanitize_for_log(match.groups())}")
-        month = HEBREW_MONTHS.get(month_heb)
+        month: Optional[str] = HEBREW_MONTHS.get(month_heb)
         if month is None:
             logger.warning(
                 f"Unknown Hebrew month '{sanitize_for_log(month_heb)}', defaulting to January"
@@ -239,18 +243,18 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
             month = "01"  # January fallback
         return {"date": f"{day.zfill(2)}/{month}/{year}", "time": time}
 
-    date_result = _safe_regex_extract(DATE_REGEX, decoded_html, "date", extract_date)
+    date_result: Optional[Any] = _safe_regex_extract(DATE_REGEX, decoded_html, "date", extract_date)
     if date_result:
         details.update(date_result)
 
     # Extract client name
-    client = _safe_regex_extract(CLIENT_REGEX, decoded_html, "client")
+    client: Optional[Any] = _safe_regex_extract(CLIENT_REGEX, decoded_html, "client")
     if client:
         details["client"] = client
         logger.debug(f"Client found: {sanitize_for_log(client)}")
 
     # Extract phone
-    phone = _safe_regex_extract(PHONE_REGEX, decoded_html, "phone")
+    phone: Optional[Any] = _safe_regex_extract(PHONE_REGEX, decoded_html, "phone")
     if phone:
         details["phone"] = phone
         logger.debug(f"Phone found: {sanitize_for_log(phone)}")
