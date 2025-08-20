@@ -18,7 +18,9 @@
         "ms-azuretools.vscode-docker",
         "amazonwebservices.aws-toolkit-vscode",
         "HashiCorp.terraform",
-        "amazonwebservices.amazon-q-vscode"
+        "amazonwebservices.amazon-q-vscode",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker"
       ]
     }
   },

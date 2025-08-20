@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/python:3.11
 
-# Install AWS SAM CLI
-RUN pip install --no-cache-dir --upgrade aws-sam-cli
+# Install AWS SAM CLI and Python development tools
+RUN pip install --no-cache-dir --upgrade aws-sam-cli ruff mypy
 
 # Install AWS CLI v2
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip" \
