@@ -151,9 +151,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
             return {"statusCode": 500}
 
         # Parse email
-        meeting_details: Optional[Dict[str, str]] = parse_email(email_content)
-        if not meeting_details:
-            logger.error("Email parsing failed")
+        try:
+            meeting_details: Dict[str, str] = parse_email(email_content)
+        except ValueError as e:
+            logger.error(f"Email parsing failed: {sanitize_for_log(str(e))}")
             return {"statusCode": 422}  # Unprocessable Entity
 
         # Send reply
@@ -268,22 +269,20 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
     return details
 
 
-def parse_email(content: str) -> Optional[Dict[str, str]]:
+def parse_email(content: str) -> Dict[str, str]:
     logger.debug(f"Email content preview: {sanitize_for_log(content[:EMAIL_PREVIEW_LENGTH])}")
 
     # Extract From address for reply
     from_match = search(r"From: ([^\n]+)", content)
     if not from_match:
-        logger.error("No From address found")
-        return None
+        raise ValueError("No From address found in email")
 
     from_address = from_match.group(1).strip()
     logger.debug(f"From address: {sanitize_for_log(from_address)}")
 
     # Check if this is from a supported domain
     if not any(domain in content for domain in SUPPORTED_DOMAINS):
-        logger.info("Not a supported email domain")
-        return None
+        raise ValueError(f"Email not from supported domain. Supported: {SUPPORTED_DOMAINS}")
 
     logger.debug("Found supported domain email")
     details = {"from": from_address}
@@ -291,7 +290,7 @@ def parse_email(content: str) -> Optional[Dict[str, str]]:
     # Decode HTML content
     decoded_html = decode_html_content(content)
     if not decoded_html:
-        return details
+        raise ValueError("Failed to decode HTML content from email")
 
     logger.debug(f"Decoded HTML: {sanitize_for_log(decoded_html[:DECODED_HTML_PREVIEW_LENGTH])}")
 
@@ -300,7 +299,9 @@ def parse_email(content: str) -> Optional[Dict[str, str]]:
     details.update(meeting_data)
 
     logger.debug(f"Final details: {sanitize_for_log(details)}")
-    return details if len(details) >= MIN_MEETING_FIELDS else None
+    if len(details) < MIN_MEETING_FIELDS:
+        raise ValueError(f"Insufficient meeting details found. Got {len(details)}, need {MIN_MEETING_FIELDS}")
+    return details
 
 
 def extract_email_address(from_field: str) -> str:
