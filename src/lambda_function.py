@@ -146,8 +146,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
         # Parse email
         meeting_details = parse_email(email_content)
         if not meeting_details:
-            logger.info("No meeting details found")
-            return {"statusCode": 200}
+            logger.error("Email parsing failed")
+            return {"statusCode": 422}  # Unprocessable Entity
 
         # Send reply
         send_reply(meeting_details, ses)
