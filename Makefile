@@ -1,5 +1,34 @@
 # Meeting Automation Service - Development Commands
 
+# Default target - show help
+help:
+	@echo "📋 Available commands:"
+	@echo ""
+	@echo "🚀 Quick Start:"
+	@echo "  make setup     - Set up configuration files"
+	@echo "  make deploy    - Deploy everything (SAM + Terraform)"
+	@echo "  make teardown  - Destroy all resources"
+	@echo ""
+	@echo "🔧 Development:"
+	@echo "  make install   - Install dev dependencies"
+	@echo "  make check     - Run all validation checks"
+	@echo "  make format    - Format code"
+	@echo "  make lint      - Run linting"
+	@echo ""
+	@echo "☁️  Deployment:"
+	@echo "  make sam-deploy       - Deploy SAM only"
+	@echo "  make terraform-plan   - Show Terraform changes"
+	@echo "  make terraform-apply  - Apply Terraform changes"
+	@echo ""
+	@echo "🌙 Day/Night Control:"
+	@echo "  make activate    - Turn on email processing"
+	@echo "  make deactivate  - Turn off email processing"
+	@echo ""
+	@echo "📊 Status:"
+	@echo "  make check-deploy - Check deployment status"
+
+default: help
+
 # Install development dependencies
 install:
 	@pip install ruff mypy
@@ -187,4 +216,4 @@ check: lint validate-lint terraform-validate
 	@make --dry-run --silent > /dev/null && echo "✅ Makefile syntax OK" || (echo "❌ Makefile syntax error" && exit 1)
 	@echo "✅ All checks passed!"
 
-.PHONY: install format lint fix validate validate-lint build sam-deploy sam-force-deploy terraform-fmt terraform-validate terraform-plan terraform-apply terraform-deploy terraform-auto-deploy deploy setup teardown activate deactivate check-deploy check
+.PHONY: help default install format lint fix validate validate-lint build sam-deploy sam-force-deploy terraform-fmt terraform-validate terraform-plan terraform-apply terraform-deploy terraform-auto-deploy deploy setup teardown activate deactivate check-deploy check
