@@ -185,18 +185,19 @@ def send_reply(details: Dict[str, str], ses: Any) -> None:
     else:
         calendar_link = "#invalid-date"
     
-    # Email body
+    # Email body - links moved to beginning
     body = f"""שלום,
+
+קישורים שימושיים:
+📱 WhatsApp: {whatsapp_link}
+📅 הוסף ליומן: {calendar_link}
 
 אישור פגישה:
 📅 תאריך: {details.get('date', '')}
 🕐 שעה: {details.get('time', '')}
 👤 לקוח: {details.get('client', '')}
 📱 טלפון: {details.get('phone', '')}
-
-קישורים שימושיים:
-📱 WhatsApp: {whatsapp_link}
-📅 הוסף ליומן: {calendar_link}
+📧 אימייל: {details.get('email', '')}
 
 בהצלחה!"""
     
@@ -205,19 +206,20 @@ def send_reply(details: Dict[str, str], ses: Any) -> None:
     if '<' in to_email and '>' in to_email:
         to_email = to_email.split('<')[1].split('>')[0]
     
-    # Create HTML version with clickable links (HTML escape user input)
+    # Create HTML version with clickable links (HTML escape user input) - links moved to beginning
     html_body = f"""<html><body style="font-family: Arial, sans-serif; direction: rtl;">
 <p>שלום,</p>
+
+<p><strong>קישורים שימושיים:</strong></p>
+<p>📱 <a href="{whatsapp_link}" style="color: #25D366; text-decoration: underline; font-weight: bold;">שלח תזכורת WhatsApp</a><br>
+📅 <a href="{calendar_link}" style="color: #4285F4; text-decoration: underline; font-weight: bold;">הוסף ליומן Google Calendar</a></p>
 
 <p><strong>אישור פגישה:</strong></p>
 <p>📅 תאריך: {html.escape(details.get('date', ''))}<br>
 🕐 שעה: {html.escape(details.get('time', ''))}<br>
 👤 לקוח: {html.escape(details.get('client', ''))}<br>
-📱 טלפון: {html.escape(details.get('phone', ''))}</p>
-
-<p><strong>קישורים שימושיים:</strong></p>
-<p>📱 <a href="{whatsapp_link}" style="color: #25D366; text-decoration: underline; font-weight: bold;">שלח תזכורת WhatsApp</a><br>
-📅 <a href="{calendar_link}" style="color: #4285F4; text-decoration: underline; font-weight: bold;">הוסף ליומן Google Calendar</a></p>
+📱 טלפון: {html.escape(details.get('phone', ''))}<br>
+📧 אימייל: {html.escape(details.get('email', ''))}</p>
 
 <p>בהצלחה!</p>
 </body></html>"""
