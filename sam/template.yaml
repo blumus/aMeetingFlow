@@ -8,17 +8,37 @@ Description: Email Parser Service
 
 # We will use the outputs from our Terraform script to configure this template
 
+Globals:
+  Function:
+    Tags:
+      Project: meeting-automation-service
+      DeployedBy: sam
+
 Resources:
   # S3 Bucket for Email Storage (Extension of Lambda - temporary storage for processing)
   EmailStorageBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${AWS::StackName}-email-storage"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
           - Id: DeleteEmailsAfter7Days
             Status: Enabled
             ExpirationInDays: 7
+      Tags:
+        - Key: Project
+          Value: meeting-automation-service
+        - Key: DeployedBy
+          Value: sam
 
   # S3 Bucket Policy - Allow SES to write emails for Lambda processing
   EmailStorageBucketPolicy:
@@ -36,6 +56,15 @@ Resources:
             Condition:
               StringEquals:
                 'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource: 
+              - !Sub "${EmailStorageBucket.Arn}/*"
+              - !Sub "${EmailStorageBucket.Arn}"
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
 
   # IAM Role for Lambda Function
   EmailParserRole:
@@ -68,7 +97,14 @@ Resources:
                 Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
-                Resource: "*"
+                # Restrict to only SES identities in this AWS account (prevents sending from other accounts' domains)
+                Resource: 
+                  - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Tags:
+        - Key: Project
+          Value: meeting-automation-service
+        - Key: DeployedBy
+          Value: sam
 
   # The Lambda Function for Email Parsing
   EmailParserFunction:
@@ -79,7 +115,7 @@ Resources:
       Handler: lambda_function.handler
       Runtime: python3.11
       CodeUri: ../src/
-      MemorySize: 128
+      MemorySize: 256
       Timeout: 60
       Role: !GetAtt EmailParserRole.Arn
 

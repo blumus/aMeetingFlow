@@ -38,6 +38,17 @@ variable "sam_stack_name" {
 }
 
 # =============================================================================
+# LOCALS
+# =============================================================================
+
+locals {
+  common_tags = {
+    Project    = "meeting-automation-service"
+    DeployedBy = "terraform"
+  }
+}
+
+# =============================================================================
 # PROVIDER CONFIGURATION
 # =============================================================================
 
@@ -47,6 +58,10 @@ provider "aws" {
   assume_role {
     role_arn     = var.assume_role_arn
     session_name = "TerraformSession"
+  }
+
+  default_tags {
+    tags = local.common_tags
   }
 }
 
@@ -58,6 +73,9 @@ provider "aws" {
 data "aws_cloudformation_export" "email_storage_bucket" {
   name = "${var.sam_stack_name}-EmailStorageBucketName"
 }
+
+# Get current AWS account ID
+data "aws_caller_identity" "current" {}
 
 # =============================================================================
 # RESOURCES
@@ -114,9 +132,17 @@ resource "aws_ses_receipt_rule" "email_parser_rule" {
 # Activate the SES receipt rule set after apply
 resource "null_resource" "activate_rule_set" {
   provisioner "local-exec" {
-    command = "aws ses set-active-receipt-rule-set --rule-set-name main-rule-set"
+    command = "aws ses set-active-receipt-rule-set --rule-set-name main-rule-set || exit 1"
   }
   depends_on = [aws_ses_receipt_rule_set.main_rule_set]
+}
+
+# Tag SES domain identity using SES v2 API (workaround for Terraform provider limitation)
+resource "null_resource" "tag_ses_domain" {
+  provisioner "local-exec" {
+    command = "aws sesv2 tag-resource --resource-arn arn:aws:ses:${var.aws_region}:${data.aws_caller_identity.current.account_id}:identity/${var.ses_domain} --tags Key=Project,Value=${local.common_tags.Project} Key=DeployedBy,Value=${local.common_tags.DeployedBy} || exit 1"
+  }
+  depends_on = [aws_ses_domain_identity.meeting_flow_domain]
 }
 
 # =============================================================================
