@@ -346,17 +346,7 @@ def generate_whatsapp_text(details: Dict[str, str]) -> str:
     )
 
 
-def generate_whatsapp_link(details: Dict[str, str]) -> str:
-    """Generate WhatsApp link with meeting reminder message."""
-    phone = details.get("phone", "").replace("-", "").replace(" ", "")
-    if phone.startswith("0"):
-        phone = "972" + phone[1:]  # Convert Israeli 0xx to +972xx
-
-    whatsapp_text = generate_whatsapp_text(details)
-    return f"https://wa.me/{phone}?text={quote(whatsapp_text)}"
-
-
-def generate_whatsapp_link_with_text(details: Dict[str, str], whatsapp_text: str) -> str:
+def generate_whatsapp_link(details: Dict[str, str], whatsapp_text: str) -> str:
     """Generate WhatsApp link with pre-generated message text."""
     phone = details.get("phone", "").replace("-", "").replace(" ", "")
     if phone.startswith("0"):
@@ -458,6 +448,6 @@ def send_reply(details: Dict[str, str], ses: Any) -> None:
     email_address = extract_email_address(details["from"])
     # Generate WhatsApp text once to avoid duplication
     whatsapp_text = generate_whatsapp_text(details)
-    whatsapp_link = generate_whatsapp_link_with_text(details, whatsapp_text)
+    whatsapp_link = generate_whatsapp_link(details, whatsapp_text)
     calendar_link = generate_calendar_link(details, email_address, whatsapp_text)
     send_email_notification(email_address, whatsapp_link, calendar_link, details, ses)
