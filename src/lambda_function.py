@@ -15,8 +15,14 @@ logger.setLevel(INFO)
 s3 = client("s3")
 ses = client("ses")
 
-# Minimum fields required for valid meeting details (from + at least 2 meeting fields)
-MIN_MEETING_FIELDS = 3
+# Logging configuration constants
+MAX_LOG_MESSAGE_LENGTH = 500
+EMAIL_PREVIEW_LENGTH = 500
+HTML_PREVIEW_LENGTH = 200
+DECODED_HTML_PREVIEW_LENGTH = 300
+
+# Business logic constants
+MIN_MEETING_FIELDS = 3  # from + at least 2 meeting fields (date/time, client, etc.)
 
 # Hebrew month names to numbers mapping
 HEBREW_MONTHS = {
@@ -104,7 +110,7 @@ def sanitize_for_log(value: Any) -> str:
     from re import sub
     sanitized = sub(r'[\x00-\x1F\x7F-\x9F]', '', text)
     # Limit length to prevent log flooding
-    return sanitized[:500] + "..." if len(sanitized) > 500 else sanitized
+    return sanitized[:MAX_LOG_MESSAGE_LENGTH] + "..." if len(sanitized) > MAX_LOG_MESSAGE_LENGTH else sanitized
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
@@ -187,7 +193,7 @@ def decode_html_content(content: str) -> Optional[str]:
     html_match = QUOTED_HTML_REGEX.search(content)
     if html_match:
         html_content = html_match.group(1)
-        logger.debug(f"Quoted-printable HTML content found: {sanitize_for_log(html_content[:200])}")
+        logger.debug(f"Quoted-printable HTML content found: {sanitize_for_log(html_content[:HTML_PREVIEW_LENGTH])}")
         try:
             return decodestring(html_content).decode("utf-8")
         except UnicodeDecodeError:
@@ -221,7 +227,7 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
     # Extract date with custom logic
     def extract_date(match: Any) -> Dict[str, str]:
         groups = match.groups()
-        if len(groups) != 4:
+        if len(groups) != 4:  # day, month, year, time
             raise ValueError(f"Date regex returned {len(groups)} groups, expected 4")
         day, month_heb, year, time = groups
         logger.debug(f"Date match: {sanitize_for_log(match.groups())}")
@@ -230,7 +236,7 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
             logger.warning(
                 f"Unknown Hebrew month '{sanitize_for_log(month_heb)}', defaulting to January"
             )
-            month = "01"
+            month = "01"  # January fallback
         return {"date": f"{day.zfill(2)}/{month}/{year}", "time": time}
 
     date_result = _safe_regex_extract(DATE_REGEX, decoded_html, "date", extract_date)
@@ -259,7 +265,7 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
 
 
 def parse_email(content: str) -> Optional[Dict[str, str]]:
-    logger.debug(f"Email content preview: {sanitize_for_log(content[:500])}")
+    logger.debug(f"Email content preview: {sanitize_for_log(content[:EMAIL_PREVIEW_LENGTH])}")
 
     # Extract From address for reply
     from_match = search(r"From: ([^\n]+)", content)
@@ -283,7 +289,7 @@ def parse_email(content: str) -> Optional[Dict[str, str]]:
     if not decoded_html:
         return details
 
-    logger.debug(f"Decoded HTML: {sanitize_for_log(decoded_html[:300])}")
+    logger.debug(f"Decoded HTML: {sanitize_for_log(decoded_html[:DECODED_HTML_PREVIEW_LENGTH])}")
 
     # Extract meeting details
     meeting_data = extract_meeting_details(decoded_html)
@@ -318,7 +324,7 @@ def generate_whatsapp_text(details: Dict[str, str]) -> str:
     # Calculate day of week
     day_name = ""
     date_parts = details.get("date", "").split("/")
-    if len(date_parts) == 3:
+    if len(date_parts) == 3:  # day, month, year
         day, month, year = date_parts
         try:
             date_obj = datetime(int(year), int(month), int(day))
@@ -344,7 +350,7 @@ def generate_whatsapp_link(details: Dict[str, str]) -> str:
     """Generate WhatsApp link with meeting reminder message."""
     phone = details.get("phone", "").replace("-", "").replace(" ", "")
     if phone.startswith("0"):
-        phone = "972" + phone[1:]
+        phone = "972" + phone[1:]  # Convert Israeli 0xx to +972xx
 
     whatsapp_text = generate_whatsapp_text(details)
     return f"https://wa.me/{phone}?text={quote(whatsapp_text)}"
@@ -357,7 +363,7 @@ def generate_calendar_link(
     date_parts = details.get("date", "").split("/")
     time_parts = details.get("time", "").split(":")
 
-    if len(date_parts) != 3 or len(time_parts) != 2:
+    if len(date_parts) != 3 or len(time_parts) != 2:  # day/month/year and hour:minute
         return "#invalid-date"
 
     day, month, year = date_parts
@@ -367,7 +373,7 @@ def generate_calendar_link(
         from datetime import timedelta
 
         start_dt = datetime(int(year), int(month), int(day), int(hour), int(minute))
-        end_dt = start_dt + timedelta(hours=1)
+        end_dt = start_dt + timedelta(hours=1)  # Default 1-hour meeting
         start_time = start_dt.strftime("%Y%m%dT%H%M%S")
         end_time = end_dt.strftime("%Y%m%dT%H%M%S")
     except ValueError:
