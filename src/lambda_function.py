@@ -1,29 +1,147 @@
-import html
-import logging
-import re
 from datetime import datetime
+from html import escape
+from logging import INFO, getLogger
+from re import DOTALL, MULTILINE, compile, search
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
 from boto3 import client
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = getLogger()
+logger.setLevel(INFO)
+
+# Initialize clients at module level for connection reuse
+# amazonq-ignore-next-line
+s3 = client("s3")
+ses = client("ses")
+
+# Minimum fields required for valid meeting details (from + at least 2 meeting fields)
+MIN_MEETING_FIELDS = 3
+
+# Hebrew month names to numbers mapping
+HEBREW_MONTHS = {
+    "ינואר": "01",
+    "פברואר": "02",
+    "מרץ": "03",
+    "אפריל": "04",
+    "מאי": "05",
+    "יוני": "06",
+    "יולי": "07",
+    "אוגוסט": "08",
+    "ספטמבר": "09",
+    "אוקטובר": "10",
+    "נובמבר": "11",
+    "דצמבר": "12",
+}
+
+# Supported email domains for meeting automation
+SUPPORTED_DOMAINS = ["yoman.co.il", "tagatime.com"]
+
+# Hebrew day names for weekday conversion
+HEBREW_DAYS = [
+    "יום שני",
+    "יום שלישי",
+    "יום רביעי",
+    "יום חמישי",
+    "יום שישי",
+    "שבת",
+    "יום ראשון",
+]
+
+# Email source address for notifications
+EMAIL_SOURCE = "receive@receive.hechven.online"
+
+# WhatsApp message template
+WHATSAPP_MESSAGE_TEMPLATE = """שלום {client},
+רק רציתי להזכיר לכם ששיחת ההכוון שלנו תתקיים ב{day_name}, {date}, בשעה {time}.
+
+במהלך השיחה אציג לכם את ארגון פעמונים ואת הכלים שאנו מציעים להתנהלות כלכלית נכונה. תהיה לכם הזדמנות לשתף אותי באתגרים ובמטרות הכלכליות שלכם, ונסיים את השיחה בתכנון צעדים ראשוניים להמשך התהליך.
+
+חשוב:
+- חשוב מאוד ששניכם תיקחו חלק בשיחה.
+- אם השעה אינה מתאימה - אשמח שתעדכנו מראש.
+- מומלץ להיות במקום שקט, ללא הפרעות, כדי שנוכל להתמקד בצורה מיטבית.
+
+מצפה לשיחה שלנו,
+ברוך ליימן
+יועץ הכוון מטעם פעמונים"""
+
+# HTML email template
+HTML_EMAIL_TEMPLATE = """<html><body style="font-family: Arial, sans-serif; direction: rtl;">
+<p>שלום,</p>
+
+<p><strong>קישורים שימושיים:</strong></p>
+<p>📱 <a href="{whatsapp_link}" style="color: #25D366; text-decoration: underline; font-weight: bold;">שלח תזכורת WhatsApp</a><br>
+📅 <a href="{calendar_link}" style="color: #4285F4; text-decoration: underline; font-weight: bold;">הוסף ליומן Google Calendar</a></p>
+
+<p><strong>אישור פגישה:</strong></p>
+<p>📅 תאריך: {date}<br>
+🕐 שעה: {time}<br>
+👤 לקוח: {client}<br>
+📱 טלפון: {phone}<br>
+📧 אימייל: {email}</p>
+
+<p>בהצלחה!</p>
+</body></html>"""
+
+# Compiled regex patterns for Hebrew email parsing
+DATE_REGEX = compile(r"(\d{1,2}) ([^\s]+) (\d{4}) בשעה (\d{1,2}:\d{2})")
+CLIENT_REGEX = compile(r"פרטי קשר: <b>([^<]+)</b>")
+PHONE_REGEX = compile(r"נייד: ([0-9]+)")
+EMAIL_REGEX = compile(r'דוא&quot;ל: <a href="mailto:([^"]+)"')
+
+# Compiled regex patterns for HTML content parsing
+BASE64_HTML_REGEX = compile(r"Content-Type: text/html[^\r\n]*\r?\nContent-Transfer-Encoding: base64\r?\n\r?\n([^-]+)", DOTALL)
+QUOTED_HTML_REGEX = compile(r"Content-Type: text/html[^\r\n]*\r?\n[^\r\n]*\r?\n\r?\n([^\r\n-]+)", DOTALL | MULTILINE)
+
+
+def sanitize_for_log(value: Any) -> str:
+    """Sanitize user input for safe logging by removing control characters."""
+    if value is None:
+        return "None"
+    text = str(value)
+    # Remove all control characters using regex (more efficient)
+    from re import sub
+    sanitized = sub(r'[\x00-\x1F\x7F-\x9F]', '', text)
+    # Limit length to prevent log flooding
+    return sanitized[:500] + "..." if len(sanitized) > 500 else sanitized
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
     try:
-        # Initialize clients inside handler for better connection management
-        s3 = client("s3")
-        ses = client("ses")
+        # Validate S3 event structure
+        if not event.get("Records") or not event["Records"]:
+            logger.error("No Records found in event")
+            return {"statusCode": 400}
+
+        record = event["Records"][0]
+        if (
+            "s3" not in record
+            or "bucket" not in record["s3"]
+            or "object" not in record["s3"]
+        ):
+            logger.error("Invalid S3 event structure")
+            return {"statusCode": 400}
 
         # Get S3 object details from S3 event
-        bucket = event["Records"][0]["s3"]["bucket"]["name"]
-        key = event["Records"][0]["s3"]["object"]["key"]
+        bucket = record["s3"]["bucket"]["name"]
+        key = record["s3"]["object"]["key"]
 
         # Get email content from S3
-        response = s3.get_object(Bucket=bucket, Key=key)
-        email_content = response["Body"].read().decode("utf-8")
+        try:
+            response = s3.get_object(Bucket=bucket, Key=key)
+            email_content = response["Body"].read().decode("utf-8")
+        except Exception as e:
+            error_code = (
+                getattr(e, "response", {}).get("Error", {}).get("Code", "Unknown")
+            )
+            if error_code == "NoSuchKey":
+                logger.error(f"S3 object not found: {sanitize_for_log(key)}")
+            elif error_code == "AccessDenied":
+                logger.error(f"Access denied to S3 object: {sanitize_for_log(key)}")
+            else:
+                logger.error(f"S3 get_object failed: {sanitize_for_log(str(e))}")
+            return {"statusCode": 500}
 
         # Parse email
         meeting_details = parse_email(email_content)
@@ -35,26 +153,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
         send_reply(meeting_details, ses)
 
         # Clean up S3
-        s3.delete_object(Bucket=bucket, Key=key)
+        try:
+            s3.delete_object(Bucket=bucket, Key=key)
+        except Exception as e:
+            logger.warning(
+                f"Failed to delete S3 object {sanitize_for_log(key)}: {sanitize_for_log(str(e))}"
+            )
+            # Continue execution - cleanup failure shouldn't stop the process
 
         return {"statusCode": 200}
 
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error: {sanitize_for_log(str(e))}")
         return {"statusCode": 500}
 
 
 def decode_html_content(content: str) -> Optional[str]:
     from quopri import decodestring
 
-    html_match = re.search(
-        r"Content-Type: text/html[^\r\n]*\r?\nContent-Transfer-Encoding: base64\r?\n\r?\n([^-]+)",
-        content,
-        re.DOTALL,
-    )
+    html_match = BASE64_HTML_REGEX.search(content)
     if html_match:
         base64_content = html_match.group(1).replace("\n", "").replace("\r", "")
-        logger.info(f"Base64 HTML content found: {base64_content[:100]}")
+        logger.info(f"Base64 HTML content found: {len(base64_content)} characters")
         try:
             from base64 import b64decode
 
@@ -63,78 +183,98 @@ def decode_html_content(content: str) -> Optional[str]:
             logger.error(f"Error decoding base64: {e}")
             return None
 
-    html_match = re.search(
-        r"Content-Type: text/html[^\r\n]*\r?\n[^\r\n]*\r?\n\r?\n([^\r\n-]+)",
-        content,
-        re.DOTALL | re.MULTILINE,
-    )
+    html_match = QUOTED_HTML_REGEX.search(content)
     if html_match:
         html_content = html_match.group(1)
-        logger.info(f"Quoted-printable HTML content found: {html_content[:200]}")
+        logger.info(f"Quoted-printable HTML content found: {sanitize_for_log(html_content[:200])}")
         try:
             return decodestring(html_content).decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                return decodestring(html_content).decode("latin-1")
+            except Exception as e:
+                logger.error(f"Error decoding quoted-printable with latin-1: {e}")
+                return None
         except Exception as e:
-            logger.error(f"Error decoding quoted-printable: {e}")
+            logger.error(f"Error decoding quoted-printable with utf-8: {e}")
             return None
 
     logger.warning("No HTML content found - both regexes failed")
     return None
 
 
+def _safe_regex_extract(regex: Any, html: str, field_name: str, extractor_func: Optional[Any] = None) -> Optional[Any]:
+    """Helper function for safe regex extraction with consistent error handling."""
+    try:
+        match = regex.search(html)
+        if match:
+            return extractor_func(match) if extractor_func else match.group(1)
+        return None
+    except Exception as e:
+        raise ValueError(f"Critical error extracting {field_name}: {sanitize_for_log(str(e))}") from e
+
+
 def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
     details = {}
 
-    # Extract date
-    date_match = re.search(
-        r"(\d{1,2}) ([^\s]+) (\d{4}) בשעה (\d{1,2}:\d{2})", decoded_html
-    )
-    if date_match:
-        day, month_heb, year, time = date_match.groups()
-        logger.info(f"Date match: {date_match.groups()}")
-        month_map = {"יולי": "07", "אוגוסט": "08", "ספטמבר": "09"}
-        month = month_map.get(month_heb, "01")
-        details["date"] = f"{day.zfill(2)}/{month}/{year}"
-        details["time"] = time
+    # Extract date with custom logic
+    def extract_date(match: Any) -> Dict[str, str]:
+        groups = match.groups()
+        if len(groups) != 4:
+            raise ValueError(f"Date regex returned {len(groups)} groups, expected 4")
+        day, month_heb, year, time = groups
+        logger.info(f"Date match: {sanitize_for_log(match.groups())}")
+        month = HEBREW_MONTHS.get(month_heb)
+        if month is None:
+            logger.warning(
+                f"Unknown Hebrew month '{sanitize_for_log(month_heb)}', defaulting to January"
+            )
+            month = "01"
+        return {"date": f"{day.zfill(2)}/{month}/{year}", "time": time}
+
+    date_result = _safe_regex_extract(DATE_REGEX, decoded_html, "date", extract_date)
+    if date_result:
+        details.update(date_result)
 
     # Extract client name
-    client_match = re.search(r"פרטי קשר: <b>([^<]+)</b>", decoded_html)
-    if client_match:
-        details["client"] = client_match.group(1)
-        logger.info(f"Client found: {details['client']}")
+    client = _safe_regex_extract(CLIENT_REGEX, decoded_html, "client")
+    if client:
+        details["client"] = client
+        logger.info(f"Client found: {sanitize_for_log(client)}")
 
     # Extract phone
-    phone_match = re.search(r"נייד: ([0-9]+)", decoded_html)
-    if phone_match:
-        details["phone"] = phone_match.group(1)
-        logger.info(f"Phone found: {details['phone']}")
+    phone = _safe_regex_extract(PHONE_REGEX, decoded_html, "phone")
+    if phone:
+        details["phone"] = phone
+        logger.info(f"Phone found: {sanitize_for_log(phone)}")
 
     # Extract client email
-    email_match = re.search(r'דוא&quot;ל: <a href="mailto:([^"]+)"', decoded_html)
-    if email_match:
-        details["email"] = email_match.group(1)
-        logger.info(f"Client email found: {details['email']}")
+    email = _safe_regex_extract(EMAIL_REGEX, decoded_html, "email")
+    if email:
+        details["email"] = email
+        logger.info(f"Client email found: {sanitize_for_log(email)}")
 
     return details
 
 
 def parse_email(content: str) -> Optional[Dict[str, str]]:
-    logger.info(f"Email content preview: {content[:500]}")
+    logger.info(f"Email content preview: {sanitize_for_log(content[:500])}")
 
     # Extract From address for reply
-    from_match = re.search(r"From: ([^\n]+)", content)
+    from_match = search(r"From: ([^\n]+)", content)
     if not from_match:
         logger.error("No From address found")
         return None
 
     from_address = from_match.group(1).strip()
-    logger.info(f"From address: {from_address}")
+    logger.info(f"From address: {sanitize_for_log(from_address)}")
 
-    # Check if this is a yoman.co.il email
-    if "yoman.co.il" not in content and "tagatime.com" not in content:
-        logger.info("Not a yoman.co.il email")
+    # Check if this is from a supported domain
+    if not any(domain in content for domain in SUPPORTED_DOMAINS):
+        logger.info("Not a supported email domain")
         return None
 
-    logger.info("Found yoman.co.il email")
+    logger.info("Found supported domain email")
     details = {"from": from_address}
 
     # Decode HTML content
@@ -142,75 +282,100 @@ def parse_email(content: str) -> Optional[Dict[str, str]]:
     if not decoded_html:
         return details
 
-    logger.info(f"Decoded HTML: {decoded_html[:300]}")
+    logger.info(f"Decoded HTML: {sanitize_for_log(decoded_html[:300])}")
 
     # Extract meeting details
     meeting_data = extract_meeting_details(decoded_html)
     details.update(meeting_data)
 
-    logger.info(f"Final details: {details}")
-    return details if len(details) > 2 else None
+    logger.info(f"Final details: {sanitize_for_log(details)}")
+    return details if len(details) >= MIN_MEETING_FIELDS else None
 
 
-def send_reply(details: Dict[str, str], ses: Any) -> None:
-    # Generate WhatsApp link with +972 prefix
-    phone = details.get("phone", "").replace("-", "").replace(" ", "")
-    if phone.startswith("0"):
-        phone = "972" + phone[1:]  # Replace leading 0 with 972
+def extract_email_address(from_field: str) -> str:
+    """Extract clean email address from 'Name <email>' format."""
+    if "<" in from_field and ">" in from_field:
+        try:
+            return from_field.split("<")[1].split(">")[0]
+        except IndexError as e:
+            raise ValueError(f"Malformed email address format: {from_field}") from e
+    return from_field
+
+
+def generate_whatsapp_text(details: Dict[str, str]) -> str:
+    """Generate WhatsApp message text."""
     # Calculate day of week
-    date_parts = details.get("date", "").split("/")
     day_name = ""
+    date_parts = details.get("date", "").split("/")
     if len(date_parts) == 3:
         day, month, year = date_parts
         try:
             date_obj = datetime(int(year), int(month), int(day))
-            hebrew_days = [
-                "יום שני",
-                "יום שלישי",
-                "יום רביעי",
-                "יום חמישי",
-                "יום שישי",
-                "שבת",
-                "יום ראשון",
-            ]
-            day_name = hebrew_days[date_obj.weekday()]
+            day_name = HEBREW_DAYS[date_obj.weekday()]
         except (ValueError, TypeError, IndexError) as e:
-            logger.error(f"Error parsing date {day}/{month}/{year}: {e}")
-            day_name = ""
+            logger.error(
+                f"Error parsing date {sanitize_for_log(day)}/{sanitize_for_log(month)}/{sanitize_for_log(year)}: {sanitize_for_log(e)}"
+            )
 
-    whatsapp_text = f"שלום {details.get('client', '')},\nרק רציתי להזכיר לכם ששיחת ההכוון שלנו תתקיים ב{day_name}, {details.get('date', '').replace('/', '.')}, בשעה {details.get('time', '')}.\n\nבמהלך השיחה אציג לכם את ארגון פעמונים ואת הכלים שאנו מציעים להתנהלות כלכלית נכונה. תהיה לכם הזדמנות לשתף אותי באתגרים ובמטרות הכלכליות שלכם, ונסיים את השיחה בתכנון צעדים ראשוניים להמשך התהליך.\n\nחשוב:\n- חשוב מאוד ששניכם תיקחו חלק בשיחה.\n- אם השעה אינה מתאימה - אשמח שתעדכנו מראש.\n- מומלץ להיות במקום שקט, ללא הפרעות, כדי שנוכל להתמקד בצורה מיטבית.\n\nמצפה לשיחה שלנו,\nברוך ליימן\nיועץ הכוון מטעם פעמונים"
-    whatsapp_link = f"https://wa.me/{phone}?text={quote(whatsapp_text)}"
+    return WHATSAPP_MESSAGE_TEMPLATE.format(
+        client=details.get('client', ''),
+        day_name=day_name,
+        date=details.get('date', '').replace('/', '.'),
+        time=details.get('time', '')
+    )
 
-    # Generate calendar link with proper date format and 1-hour duration
-    date_parts = details.get("date", "").split("/")  # Split DD/MM/YYYY
-    time_parts = details.get("time", "").split(":")  # Split HH:MM
-    client_name = details.get("client", "")
-    if len(date_parts) == 3 and len(time_parts) == 2:
-        day, month, year = date_parts
-        hour, minute = time_parts
-        start_time = (
-            f"{year}{month.zfill(2)}{day.zfill(2)}T{hour.zfill(2)}{minute.zfill(2)}00"
+
+def generate_whatsapp_link(details: Dict[str, str]) -> str:
+    """Generate WhatsApp link with meeting reminder message."""
+    phone = details.get("phone", "").replace("-", "").replace(" ", "")
+    if phone.startswith("0"):
+        phone = "972" + phone[1:]
+
+    whatsapp_text = generate_whatsapp_text(details)
+    return f"https://wa.me/{phone}?text={quote(whatsapp_text)}"
+
+
+def generate_calendar_link(
+    details: Dict[str, str], email_address: str, whatsapp_text: str
+) -> str:
+    """Generate Google Calendar link for the meeting."""
+    date_parts = details.get("date", "").split("/")
+    time_parts = details.get("time", "").split(":")
+
+    if len(date_parts) != 3 or len(time_parts) != 2:
+        return "#invalid-date"
+
+    day, month, year = date_parts
+    hour, minute = time_parts
+
+    try:
+        from datetime import timedelta
+
+        start_dt = datetime(int(year), int(month), int(day), int(hour), int(minute))
+        end_dt = start_dt + timedelta(hours=1)
+        start_time = start_dt.strftime("%Y%m%dT%H%M%S")
+        end_time = end_dt.strftime("%Y%m%dT%H%M%S")
+    except ValueError:
+        logger.error(
+            f"Invalid date/time values: {sanitize_for_log(date_parts)} {sanitize_for_log(time_parts)}"
         )
-        # Add 1 hour for end time
-        end_hour = str(int(hour) + 1).zfill(2)
-        end_time = f"{year}{month.zfill(2)}{day.zfill(2)}T{end_hour}{minute.zfill(2)}00"
-        subject = f"פעמונים - שיחת הכוון בזום - {client_name}"
-        # Extract just email from 'Baruch L <email@domain.com>' format
-        attendee_email = details["from"]
-        if "<" in attendee_email and ">" in attendee_email:
-            attendee_email = attendee_email.split("<")[1].split(">")[0]
+        return "#invalid-date"
 
-        # Add client email if available (from parsed email content)
-        client_email = details.get("email", "")
-        attendees = attendee_email
-        if client_email:
-            attendees = f"{attendee_email},{client_email}"
+    subject = f"פעמונים - שיחת הכוון בזום - {details.get('client', '')}"
+    client_email = details.get("email", "")
+    attendees = f"{email_address},{client_email}" if client_email else email_address
 
-        calendar_link = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={quote(subject)}&dates={start_time}/{end_time}&add={attendees}&details={quote(whatsapp_text)}"
-    else:
-        calendar_link = "#invalid-date"
+    return f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={quote(subject)}&dates={start_time}/{end_time}&add={attendees}&details={quote(whatsapp_text)}"
 
-    # Email body - links moved to beginning
+
+def send_email_notification(
+    email_address: str,
+    whatsapp_link: str,
+    calendar_link: str,
+    details: Dict[str, str],
+    ses: Any,
+) -> None:
+    """Send email notification with meeting details and links."""
     body = f"""שלום,
 
 קישורים שימושיים:
@@ -218,45 +383,51 @@ def send_reply(details: Dict[str, str], ses: Any) -> None:
 📅 הוסף ליומן: {calendar_link}
 
 אישור פגישה:
-📅 תאריך: {details.get("date", "")}
-🕐 שעה: {details.get("time", "")}
-👤 לקוח: {details.get("client", "")}
-📱 טלפון: {details.get("phone", "")}
-📧 אימייל: {details.get("email", "")}
+📅 תאריך: {sanitize_for_log(details.get("date", ""))}
+🕐 שעה: {sanitize_for_log(details.get("time", ""))}
+👤 לקוח: {sanitize_for_log(details.get("client", ""))}
+📱 טלפון: {sanitize_for_log(details.get("phone", ""))}
+📧 אימייל: {sanitize_for_log(details.get("email", ""))}
 
 בהצלחה!"""
 
-    # Extract just email from 'Baruch L <email@domain.com>' format
-    to_email = details["from"]
-    if "<" in to_email and ">" in to_email:
-        to_email = to_email.split("<")[1].split(">")[0]
-
-    # Create HTML version with clickable links (HTML escape user input) - links moved to beginning
-    html_body = f"""<html><body style="font-family: Arial, sans-serif; direction: rtl;">
-<p>שלום,</p>
-
-<p><strong>קישורים שימושיים:</strong></p>
-<p>📱 <a href="{whatsapp_link}" style="color: #25D366; text-decoration: underline; font-weight: bold;">שלח תזכורת WhatsApp</a><br>
-📅 <a href="{calendar_link}" style="color: #4285F4; text-decoration: underline; font-weight: bold;">הוסף ליומן Google Calendar</a></p>
-
-<p><strong>אישור פגישה:</strong></p>
-<p>📅 תאריך: {html.escape(details.get("date", ""))}<br>
-🕐 שעה: {html.escape(details.get("time", ""))}<br>
-👤 לקוח: {html.escape(details.get("client", ""))}<br>
-📱 טלפון: {html.escape(details.get("phone", ""))}<br>
-📧 אימייל: {html.escape(details.get("email", ""))}</p>
-
-<p>בהצלחה!</p>
-</body></html>"""
-
-    ses.send_email(
-        Source="receive@receive.hechven.online",
-        Destination={"ToAddresses": [to_email]},
-        Message={
-            "Subject": {"Data": "אישור פגישה", "Charset": "UTF-8"},
-            "Body": {
-                "Text": {"Data": body, "Charset": "UTF-8"},
-                "Html": {"Data": html_body, "Charset": "UTF-8"},
-            },
-        },
+    html_body = HTML_EMAIL_TEMPLATE.format(
+        whatsapp_link=escape(whatsapp_link),
+        calendar_link=escape(calendar_link),
+        date=escape(details.get("date", "")),
+        time=escape(details.get("time", "")),
+        client=escape(details.get("client", "")),
+        phone=escape(details.get("phone", "")),
+        email=escape(details.get("email", ""))
     )
+
+    try:
+        ses.send_email(
+            Source=EMAIL_SOURCE,
+            Destination={"ToAddresses": [email_address]},
+            Message={
+                "Subject": {"Data": "אישור פגישה", "Charset": "UTF-8"},
+                "Body": {
+                    "Text": {"Data": body, "Charset": "UTF-8"},
+                    "Html": {"Data": html_body, "Charset": "UTF-8"},
+                },
+            },
+        )
+        logger.info(f"Email sent successfully to {sanitize_for_log(email_address)}")
+    except Exception as e:
+        logger.error(
+            f"Failed to send email to {sanitize_for_log(email_address)}: {sanitize_for_log(str(e))}"
+        )
+        raise
+
+
+def send_reply(details: Dict[str, str], ses: Any) -> None:
+    """Send meeting confirmation reply with WhatsApp and calendar links."""
+    if "from" not in details:
+        raise ValueError("Missing required 'from' field in meeting details")
+    email_address = extract_email_address(details["from"])
+    whatsapp_link = generate_whatsapp_link(details)
+    # Extract the raw WhatsApp text before URL encoding
+    whatsapp_text = generate_whatsapp_text(details)
+    calendar_link = generate_calendar_link(details, email_address, whatsapp_text)
+    send_email_notification(email_address, whatsapp_link, calendar_link, details, ses)
