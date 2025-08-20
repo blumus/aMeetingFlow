@@ -1,6 +1,7 @@
 from datetime import datetime
 from html import escape
 from logging import INFO, getLogger
+from os import getenv
 from re import DOTALL, MULTILINE, Match, Pattern, compile, search
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote
@@ -54,8 +55,8 @@ HEBREW_DAYS: List[str] = [
     "יום ראשון",
 ]
 
-# Email source address for notifications
-EMAIL_SOURCE = "receive@receive.hechven.online"
+# Email source address for notifications (configurable via environment)
+EMAIL_SOURCE = getenv("EMAIL_SOURCE", "receive@receive.hechven.online")
 
 # WhatsApp message template
 WHATSAPP_MESSAGE_TEMPLATE = """שלום {client},

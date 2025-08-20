@@ -6,46 +6,11 @@ This project automates the extraction of meeting details from incoming emails an
 
 # Deployment and Teardown Instructions
 
-## Quick Start (Automated)
-
-For automated deployment using the included Makefile:
-
-```bash
-# Run all checks (linting, validation)
-make check
-
-# Deploy everything (SAM + Terraform)
-make deploy
-```
-
-## Available Makefile Targets
-
-### Development
-- `make install` - Install development dependencies (ruff, mypy)
-- `make format` - Format code with ruff
-- `make lint` - Run linting and type checking
-- `make fix` - Auto-fix issues and format code
-- `make check` - Run all validation checks
-
-### SAM Deployment
-- `make build` - Build SAM application (includes linting)
-- `make sam-deploy` - Deploy SAM stack
-- `make sam-force-deploy` - Force redeploy SAM stack
-
-### Terraform Deployment
-- `make terraform-plan` - Show Terraform changes
-- `make terraform-apply` - Apply Terraform changes (with confirmation)
-- `make terraform-auto-deploy` - Apply Terraform changes (no confirmation)
-
-### Combined Deployment
-- `make deploy` - Full deployment (SAM + Terraform, automated)
-
-## Manual Deployment (Alternative)
-
-If you prefer manual deployment or need more control:
-
 ## Prerequisites
--
+- AWS CLI installed and configured
+- AWS SAM CLI installed
+- Terraform installed
+- IAM permissions to assume roles and manage resources
 ## IAM Role Setup for Deployment
 
 Before deploying with Terraform and AWS SAM, you need to create an IAM role that both tools can assume. This role should have:
@@ -93,47 +58,120 @@ Before deploying with Terraform and AWS SAM, you need to create an IAM role that
 For production, restrict `Resource` to only those resources needed.
 
 Once the role is created, use its ARN in your `samconfig.toml` and trust policy setup as described in the deployment steps.
-- AWS CLI installed and configured
-- AWS SAM CLI installed
-- Terraform installed
-- IAM permissions to assume roles and manage resources
+
+
+## Quick Start (Semi-Automated)
+
+For semi-automated setup and deployment using the included Makefile:
+
+```bash
+# 1. Set up configuration files from templates
+make setup
+
+# 2. Edit sam/samconfig.toml with your settings:
+# - Update role_arn with your AWS account number
+# - Add resolve_s3 = true for automatic S3 bucket creation
+# - Update parameter_overrides with your email source
+
+# 3. Deploy SAM stack first to get Lambda ARN
+make sam-deploy
+
+# 4. Edit terraform/terraform.tfvars with:
+# - Your domain name (same as in samconfig.toml)
+# - AWS account number in assume_role_arn
+# - Lambda function ARN from SAM deployment output
+
+# Example configurations:
+# sam/samconfig.toml:
+# parameter_overrides = "EmailSource=receive@yourdomain.com"
+# 
+# terraform/terraform.tfvars:
+# ses_domain = "yourdomain.com"
+# ses_recipient_email = "receive@yourdomain.com"
+
+# 5. Deploy everything (SAM + Terraform)
+make deploy
+
+# 6. Add DNS records from Terraform output to your DNS provider:
+# - DKIM CNAME records (3 records)
+# - DMARC TXT record
+# - MX record
+# - Domain verification TXT record
+```
+
+## Teardown
+
+To destroy all AWS resources and clean up:
+
+```bash
+make teardown
+```
+
+**After teardown, manually remove DNS records from your DNS provider:**
+- Delete the 3 DKIM CNAME records
+- Delete the DMARC TXT record
+- Delete the MX record
+- Delete the domain verification TXT record
+
+## Day/Night Control
+
+To control when the system processes emails:
+
+```bash
+# Turn off email processing at night
+make deactivate
+
+# Turn on email processing in the morning
+make activate
+```
+
+This allows you to disable email processing during off-hours while keeping the infrastructure running.
+
+## Updating Lambda Function
+
+After successful initial deployment, to update the Lambda function code:
+
+```bash
+# 1. Edit your code in src/lambda_function.py
+# 2. Deploy changes
+make deploy
+```
+
+## Available Makefile Targets
+
+### Setup and Teardown
+- `make setup` - Copy configuration templates and set up project
+- `make teardown` - Destroy all AWS resources and clean up configuration
+- `make activate` - Activate email processing (turn on for day)
+- `make deactivate` - Deactivate email processing (turn off for night)
+
+### Development
+- `make install` - Install development dependencies (ruff, mypy)
+- `make format` - Format code with ruff
+- `make lint` - Run linting and type checking
+- `make fix` - Auto-fix issues and format code
+- `make check` - Run all validation checks
+
+### SAM Deployment
+- `make build` - Build SAM application (includes linting)
+- `make sam-deploy` - Deploy SAM stack
+- `make sam-force-deploy` - Force redeploy SAM stack
+
+### Terraform Deployment
+- `make terraform-plan` - Show Terraform changes
+- `make terraform-apply` - Apply Terraform changes (with confirmation)
+- `make terraform-auto-deploy` - Apply Terraform changes (no confirmation)
+
+### Combined Deployment
+- `make deploy` - Full deployment (SAM + Terraform, automated)
+
+## Manual Deployment (Alternative)
+
+If you prefer manual deployment or need more control:
 
 ## Manual Deployment Steps
 
-**Note:** You can use `make deploy` for automated deployment after configuration. The manual steps below are provided for reference and troubleshooting.
-
-### 0. IAM Role Trust Policy Setup (Best Practice)
-
-
-To allow both Terraform and AWS SAM to assume the deployment role automatically, set the IAM role's trust policy to include both your IAM user (or role) and the AWS CloudFormation service principal. Replace the example ARN below with your actual IAM user or role ARN:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "AWS": "arn:aws:iam::123456789012:user/example-deployment-user"
-      },
-      "Action": "sts:AssumeRole"
-    },
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "cloudformation.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-```
-
-**Explanation:**
-- Replace `arn:aws:iam::123456789012:user/example-deployment-user` with your actual IAM user or role ARN that Terraform uses for deployment.
-- The CloudFormation service principal (`cloudformation.amazonaws.com`) is required for AWS SAM deployments.
-
-This enables Terraform to assume the role as your IAM user or role, and SAM to assume the role via CloudFormation.
+**Note:** ***You can use `make deploy` for automated deployment after configuration. The manual steps below are provided for reference and troubleshooting.***
 
 ### 1. Configure SAM
 
@@ -227,7 +265,7 @@ This enables DKIM signing and DMARC policy for your domain. Do not use the sampl
 
 ---
 
-## Undo/Teardown Steps
+## Manual Teardown Steps
 
 ### Option 1: Manual Teardown
 
@@ -260,18 +298,9 @@ Note: SAM stack deletion still needs to be done manually as shown above.
   rm sam/samconfig.toml
   ```
 
-### 2. Remove DNS Records
+### Remove DNS Records
 
 - Delete DKIM CNAME, and DMARC TXT records from your DNS provider.
-
-### 3. Unset Temporary AWS Credentials
-
-- Run:
-  ```bash
-  unset AWS_ACCESS_KEY_ID
-  unset AWS_SECRET_ACCESS_KEY
-  unset AWS_SESSION_TOKEN
-  ```
 
 ## Troubleshooting
 - If you see an S3 bucket error, run `sam deploy --guided` to set up the bucket.

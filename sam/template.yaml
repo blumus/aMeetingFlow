@@ -8,6 +8,12 @@ Description: Email Parser Service
 
 # We will use the outputs from our Terraform script to configure this template
 
+Parameters:
+  EmailSource:
+    Type: String
+    Default: "receive@example.com"
+    Description: "Email address for sending notifications"
+
 Globals:
   Function:
     Tags:
@@ -118,6 +124,9 @@ Resources:
       MemorySize: 256
       Timeout: 60
       Role: !GetAtt EmailParserRole.Arn
+      Environment:
+        Variables:
+          EMAIL_SOURCE: !Sub "${EmailSource}"
 
   # Permission for SES to invoke Lambda
   EmailParserFunctionPermissionForSES:

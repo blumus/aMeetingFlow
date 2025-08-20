@@ -6,3 +6,5 @@ confirm_changeset = true
 disable_rollback = false
 capabilities = "CAPABILITY_IAM"
 role_arn = "arn:aws:iam::my_awsacount_number:role/TerraformRole"
+resolve_s3 = true
+parameter_overrides = "EmailSource=receive@your-domain.com"
