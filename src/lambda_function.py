@@ -98,8 +98,14 @@ PHONE_REGEX: Pattern[str] = compile(r"נייד: ([0-9]+)")
 EMAIL_REGEX: Pattern[str] = compile(r'דוא&quot;ל: <a href="mailto:([^"]+)"')
 
 # Compiled regex patterns for HTML content parsing
-BASE64_HTML_REGEX: Pattern[str] = compile(r"Content-Type: text/html[^\r\n]*\r?\nContent-Transfer-Encoding: base64\r?\n\r?\n([^-]+)", DOTALL)
-QUOTED_HTML_REGEX: Pattern[str] = compile(r"Content-Type: text/html[^\r\n]*\r?\n[^\r\n]*\r?\n\r?\n([^\r\n-]+)", DOTALL | MULTILINE)
+BASE64_HTML_REGEX: Pattern[str] = compile(
+    r"Content-Type: text/html[^\r\n]*\r?\nContent-Transfer-Encoding: base64\r?\n\r?\n([^-]+)",
+    DOTALL,
+)
+QUOTED_HTML_REGEX: Pattern[str] = compile(
+    r"Content-Type: text/html[^\r\n]*\r?\n[^\r\n]*\r?\n\r?\n([^\r\n-]+)",
+    DOTALL | MULTILINE,
+)
 
 
 def sanitize_for_log(value: Any) -> str:
@@ -109,9 +115,14 @@ def sanitize_for_log(value: Any) -> str:
     text = str(value)
     # Remove all control characters using regex (more efficient)
     from re import sub
-    sanitized = sub(r'[\x00-\x1F\x7F-\x9F]', '', text)
+
+    sanitized = sub(r"[\x00-\x1F\x7F-\x9F]", "", text)
     # Limit length to prevent log flooding
-    return sanitized[:MAX_LOG_MESSAGE_LENGTH] + "..." if len(sanitized) > MAX_LOG_MESSAGE_LENGTH else sanitized
+    return (
+        sanitized[:MAX_LOG_MESSAGE_LENGTH] + "..."
+        if len(sanitized) > MAX_LOG_MESSAGE_LENGTH
+        else sanitized
+    )
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
@@ -173,7 +184,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, int]:
         return {"statusCode": 200}
 
     except Exception as e:
-        logger.error(f"Error processing S3 object {sanitize_for_log(key)}: {sanitize_for_log(str(e))}")
+        logger.error(
+            f"Error processing S3 object {sanitize_for_log(key)}: {sanitize_for_log(str(e))}"
+        )
         return {"statusCode": 500}
 
 
@@ -195,7 +208,9 @@ def decode_html_content(content: str) -> Optional[str]:
     html_match = QUOTED_HTML_REGEX.search(content)
     if html_match:
         html_content: str = html_match.group(1)
-        logger.debug(f"Quoted-printable HTML content found: {sanitize_for_log(html_content[:HTML_PREVIEW_LENGTH])}")
+        logger.debug(
+            f"Quoted-printable HTML content found: {sanitize_for_log(html_content[:HTML_PREVIEW_LENGTH])}"
+        )
         try:
             return decodestring(html_content).decode("utf-8")
         except UnicodeDecodeError:
@@ -212,7 +227,12 @@ def decode_html_content(content: str) -> Optional[str]:
     return None
 
 
-def _safe_regex_extract(regex: Pattern[str], html: str, field_name: str, extractor_func: Optional[Callable[[Match[str]], Any]] = None) -> Optional[Any]:
+def _safe_regex_extract(
+    regex: Pattern[str],
+    html: str,
+    field_name: str,
+    extractor_func: Optional[Callable[[Match[str]], Any]] = None,
+) -> Optional[Any]:
     """Helper function for safe regex extraction with consistent error handling."""
     try:
         match: Optional[Match[str]] = regex.search(html)
@@ -220,10 +240,14 @@ def _safe_regex_extract(regex: Pattern[str], html: str, field_name: str, extract
             return extractor_func(match) if extractor_func else match.group(1)
         return None
     except Exception as e:
-        raise ValueError(f"Critical error extracting {field_name}: {sanitize_for_log(str(e))}") from e
+        raise ValueError(
+            f"Critical error extracting {field_name}: {sanitize_for_log(str(e))}"
+        ) from e
 
 
 def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
+    # Extract only from forwarded content to avoid contamination
+    forwarded_content = extract_forwarded_content(decoded_html)
     details: Dict[str, str] = {}
 
     # Extract date with custom logic
@@ -245,24 +269,28 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
             month = "01"  # January fallback
         return {"date": f"{day.zfill(2)}/{month}/{year}", "time": time}
 
-    date_result: Optional[Any] = _safe_regex_extract(DATE_REGEX, decoded_html, "date", extract_date)
+    date_result: Optional[Any] = _safe_regex_extract(
+        DATE_REGEX, forwarded_content, "date", extract_date
+    )
     if date_result:
         details.update(date_result)
 
-    # Extract client name
-    client: Optional[Any] = _safe_regex_extract(CLIENT_REGEX, decoded_html, "client")
+    # Extract client name from forwarded content only
+    client: Optional[Any] = _safe_regex_extract(
+        CLIENT_REGEX, forwarded_content, "client"
+    )
     if client:
         details["client"] = client
         logger.debug(f"Client found: {sanitize_for_log(client)}")
 
-    # Extract phone
-    phone: Optional[Any] = _safe_regex_extract(PHONE_REGEX, decoded_html, "phone")
+    # Extract phone from forwarded content only
+    phone: Optional[Any] = _safe_regex_extract(PHONE_REGEX, forwarded_content, "phone")
     if phone:
         details["phone"] = phone
         logger.debug(f"Phone found: {sanitize_for_log(phone)}")
 
-    # Extract client email
-    email = _safe_regex_extract(EMAIL_REGEX, decoded_html, "email")
+    # Extract client email from forwarded content only
+    email = _safe_regex_extract(EMAIL_REGEX, forwarded_content, "email")
     if email:
         details["email"] = email
         logger.debug(f"Client email found: {sanitize_for_log(email)}")
@@ -270,20 +298,59 @@ def extract_meeting_details(decoded_html: str) -> Dict[str, str]:
     return details
 
 
-def parse_email(content: str) -> Dict[str, str]:
-    logger.debug(f"Email content preview: {sanitize_for_log(content[:EMAIL_PREVIEW_LENGTH])}")
+def extract_forwarder_email(content: str) -> str:
+    """Extract forwarder email from headers section only."""
+    # RFC 5322: headers are separated from body by a blank line
+    headers_end = content.find("\n\n")
+    if headers_end == -1:
+        headers_end = content.find("\r\n\r\n")
 
-    # Extract From address for reply
-    from_match = search(r"From: ([^\n]+)", content)
+    if headers_end == -1:
+        # Non-RFC compliant email - this should not happen
+        raise ValueError(
+            "Invalid email format: no blank line separating headers from body"
+        )
+
+    headers_only = content[:headers_end]
+    from_match = search(r"^From:\s*(.+?)$", headers_only, MULTILINE)
+
     if not from_match:
-        raise ValueError("No From address found in email")
+        raise ValueError("No From address found in email headers")
+    return from_match.group(1).strip()
 
-    from_address = from_match.group(1).strip()
+
+def extract_forwarded_content(decoded_html: str) -> str:
+    """Extract content after forwarded message marker."""
+    markers = [
+        "---------- Forwarded message ---------",  # Gmail
+        "Begin forwarded message:",  # Mac Mail
+        "-----Original Message-----",  # Outlook
+        "From:",  # Sometimes no explicit marker
+    ]
+
+    for marker in markers:
+        marker_pos = decoded_html.find(marker)
+        if marker_pos != -1:
+            return decoded_html[marker_pos + len(marker) :]
+
+    # Fallback: use entire content if no marker found
+    return decoded_html
+
+
+def parse_email(content: str) -> Dict[str, str]:
+    logger.debug(
+        f"Email content preview: {sanitize_for_log(content[:EMAIL_PREVIEW_LENGTH])}"
+    )
+
+    # Extract From address from headers only
+    from_address = extract_forwarder_email(content)
     logger.debug(f"From address: {sanitize_for_log(from_address)}")
 
     # Check if this is from a supported domain
     if not any(domain in content for domain in SUPPORTED_DOMAINS):
-        raise ValueError(f"Email not from supported domain. Supported: {SUPPORTED_DOMAINS}")
+        raise ValueError(
+            f"Email not from supported domain. Supported: {SUPPORTED_DOMAINS}"
+        )
 
     logger.debug("Found supported domain email")
     details = {"from": from_address}
@@ -293,7 +360,9 @@ def parse_email(content: str) -> Dict[str, str]:
     if not decoded_html:
         raise ValueError("Failed to decode HTML content from email")
 
-    logger.debug(f"Decoded HTML: {sanitize_for_log(decoded_html[:DECODED_HTML_PREVIEW_LENGTH])}")
+    logger.debug(
+        f"Decoded HTML: {sanitize_for_log(decoded_html[:DECODED_HTML_PREVIEW_LENGTH])}"
+    )
 
     # Extract meeting details
     meeting_data = extract_meeting_details(decoded_html)
@@ -301,7 +370,9 @@ def parse_email(content: str) -> Dict[str, str]:
 
     logger.debug(f"Final details: {sanitize_for_log(details)}")
     if len(details) < MIN_MEETING_FIELDS:
-        raise ValueError(f"Insufficient meeting details found. Got {len(details)}, need {MIN_MEETING_FIELDS}")
+        raise ValueError(
+            f"Insufficient meeting details found. Got {len(details)}, need {MIN_MEETING_FIELDS}"
+        )
     return details
 
 
@@ -341,14 +412,14 @@ def generate_whatsapp_text(details: Dict[str, str]) -> str:
             )
 
     # Extract consultant name from From field
-    consultant_name = extract_consultant_name(details.get('from', ''))
+    consultant_name = extract_consultant_name(details.get("from", ""))
 
     return WHATSAPP_MESSAGE_TEMPLATE.format(
-        client=details.get('client', ''),
+        client=details.get("client", ""),
         day_name=day_name,
-        date=details.get('date', '').replace('/', '.'),
-        time=details.get('time', ''),
-        consultant_name=consultant_name
+        date=details.get("date", "").replace("/", "."),
+        time=details.get("time", ""),
+        consultant_name=consultant_name,
     )
 
 
@@ -424,7 +495,7 @@ def send_email_notification(
         time=escape(details.get("time", "")),
         client=escape(details.get("client", "")),
         phone=escape(details.get("phone", "")),
-        email=escape(details.get("email", ""))
+        email=escape(details.get("email", "")),
     )
 
     try:
