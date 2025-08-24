@@ -169,6 +169,10 @@ make deploy
 
 For detailed manual deployment steps and troubleshooting, see [docs/manual-deployment.md](docs/manual-deployment.md).
 
+## Development Workflow
+
+For development best practices and lessons learned, see [docs/DEVELOPER_CONTEXT.md](docs/DEVELOPER_CONTEXT.md). This file contains critical information to prevent common development mistakes and ensure smooth development workflow.
+
 ## Troubleshooting
 - If you see an S3 bucket error, run `sam deploy --guided` to set up the bucket.
 - If you get a role assumption error, check your IAM trust policy and permissions.
